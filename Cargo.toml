@@ -1,0 +1,22 @@
+[package]
+name = "runim"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+wgpu = "30.0.1"
+winit = "0.30.13"
+bytemuck = { version = "1.25.2", features = ["derive"] }
+glam = { version = "0.34.1"}
+pollster = "1.0.1"
+log = "0.4.34"
+env_logger = "0.11.11"
+anyhow = "1.0.104"
+image = { version = "0.25.10", default-features = false, features = ["png"]}
+parking_lot = "0.13.0"
+
+[features]
+default = ["debugging", "prefixed_prelude"]
+debugging = []
+prefixed_prelude = []
+# TODO: Use parking_lot only if corresponding feature is enabled

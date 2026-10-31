@@ -1,0 +1,49 @@
+//! # Runim - Rust Animation Renderer
+//!
+//! Runim is a library providing tools for creating and rendering
+//! math animations using Rust programming language inspired
+//! by [Manim](https://www.manim.community).
+//!
+//! # Installation
+//! Run the following Cargo command to install Runim's latest stable version:
+//! ```sh
+//! cargo add runim
+//! ```
+//! Or add the following lines to your `Cargo.toml`:
+//! ```yaml
+//! [dependencies]
+//! runim = "0.1.0"
+//! ```
+
+pub mod dispatch;
+pub mod renderer;
+pub mod shapes;
+
+/// The Runim Prelude.
+///
+/// The purpose of this module is to alleviate imports of pragmatic Runim types and traits
+/// by adding a glob import in code of Runim API clients:
+/// ```ignore
+/// use runim::prelude::*;
+/// ```
+///
+/// If importing objects with commonly used names like `Scene` causes name collisions,
+/// [runim::prelude::prefixed] might be used.
+///
+/// This option requires `prefixed_prelude` feature flag to be enabled.
+pub mod prelude {
+    pub use super::dispatch::RunimDispatcher;
+    pub use super::shapes::{AnimationConfig, Scene, RIObject, Shape};
+
+    /// Alternative version of the [runim::prelude] with all re-exports having `RI` prefix.
+    ///
+    /// This module allows using Runim prelide without claiming commonly used names like `Scene`.
+    #[cfg(feature = "prefixed_prelude")]
+    pub mod prefixed {
+        pub use super::RunimDispatcher as RIDispatcher;
+        pub use super::AnimationConfig as RIAnimationConfig;
+        pub use super::Scene as RIScene;
+        pub use super::RIObject;
+        pub use super::Shape as RIShape;
+    }
+}
