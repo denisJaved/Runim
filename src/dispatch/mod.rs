@@ -1,13 +1,17 @@
 mod renderer;
 
+use std::collections::HashMap;
+use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
 use std::thread;
 use std::thread::JoinHandle;
-
-use crate::shapes::AnimationConfig;
+use std::time::Duration;
+use thiserror::Error;
+use crate::shapes::{AnimationConfig, ObjectID, Scene};
 
 pub use renderer::{Command, CommandCallback, Renderer, FriendlyRenderer};
+use crate::animations::Animation;
 
 /// Dispatcher facilitates interactions between [Renderer] and Runim clients.
 /// 
@@ -30,6 +34,10 @@ pub use renderer::{Command, CommandCallback, Renderer, FriendlyRenderer};
 pub struct RunimDispatcher<R: Renderer> {
     tx: mpsc::Sender<Command>,
     rx: mpsc::Receiver<CommandCallback>,
+
+    scenes: HashMap<ObjectID, Scene>,
+    active_scene: Option<ObjectID>,
+
     _thread: JoinHandle<()>,
     __marker: PhantomData<R>
 }
@@ -54,9 +62,79 @@ impl<R: Renderer> RunimDispatcher<R> {
         Ok(RunimDispatcher::<R> {
             tx,
             rx,
+            scenes: HashMap::new(),
+            active_scene: None,
             _thread: handle,
             __marker: PhantomData
         })
+    }
+
+    pub fn new_scene(&mut self) -> ObjectID {
+        let scene = Scene::new();
+        let id = scene.id;
+        self.scenes.insert(scene.id, scene);
+        id
+    }
+    
+    /// Returns **mutable** reference to a [Scene] by its id.
+    /// 
+    /// This function returns mutable references by default,
+    /// because mutating objects in the scene is more common
+    /// than reading them. For immutable references use [RunimDispatcher::scene_imm]
+    /// 
+    /// # Example
+    /// ```ignore
+    /// use runim::prelude::*;
+    /// use runim::renderer::debug::DebugRenderer;
+    /// use runim::shapes::ObjectID;
+    ///
+    /// let dispatcher = RunimDispatcher::<DebugRenderer>::new().unwrap();
+    ///
+    /// let scene: ObjectID = dispatcher.new_scene();
+    /// dispatcher.scene(scene)
+    ///     .add_square()
+    ///     .set_pos(14, 14);
+    /// ```
+    pub fn scene(&mut self, id: &ObjectID) -> &mut Scene {
+        self.scenes.get_mut(id).expect("unknown scene")
+    }
+    
+    pub fn scene_imm(&self, id: &ObjectID) -> &Scene {
+        self.scenes.get(id).expect("unknown scene")
+    }
+    
+    pub fn set_scene(&mut self, id: ObjectID) -> anyhow::Result<()> {
+        let scene = self.scenes.get(&id).expect("Unknown scene");
+        self.send(Command::SetScene {
+            objects: scene.objects.clone(),
+            base: scene.base.clone()
+        });
+        self.active_scene = Some(id);
+        Ok(())
+    }
+    
+    pub fn wait(&mut self, duration: Duration) -> anyhow::Result<()> {
+        let active = self.active_scene.ok_or(DispatchError::NoActiveScene)?;
+        self.send(Command::Wait(duration));
+        self.scenes.get_mut(&active).unwrap().clock += duration.as_secs_f64();
+        Ok(())
+    }
+    
+    pub fn play<A: IntoAnimations>(&mut self, anims: A) -> anyhow::Result<()> {
+        let anims = anims.into_animations();
+        let duration = anims.iter().map(|a| a.duration()).fold(Duration::ZERO, Duration::max);
+        
+        let active = self.active_scene.ok_or(DispatchError::NoActiveScene)?;
+        self.send(Command::Play {
+            animations: anims.clone(),
+            duration
+        });
+        let scene = self.scenes.get_mut(&active).unwrap();
+        for anims in &anims {
+            anims.apply(&mut scene.base, 1.0);
+        }
+        scene.clock += duration.as_secs_f64();
+        Ok(())
     }
     
     /// Prepares [Renderer] for rendering. **Must be called exactly once!**
@@ -92,5 +170,52 @@ fn run_renderer<R: Renderer>(
 ) {
     while let Ok(cmd) = rx.recv() {
         renderer.execute(cmd)
+    }
+}
+
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum DispatchError {
+    NoActiveScene,
+    UnknownScene
+}
+
+impl Display for DispatchError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&self, f)
+    }
+}
+
+trait IntoAnimations {
+    fn into_animations(self) -> Vec<Arc<dyn Animation>>;
+}
+
+impl IntoAnimations for Arc<dyn Animation> {
+    fn into_animations(self) -> Vec<Arc<dyn Animation>> {
+        vec![self]
+    }
+}
+
+impl<A: Animation> IntoAnimations for A {
+    fn into_animations(self) -> Vec<Arc<dyn Animation>> {
+        vec![Arc::new(self)]
+    }
+}
+
+impl<A: Animation, B: Animation> IntoAnimations for (A, B) {
+    fn into_animations(self) -> Vec<Arc<dyn Animation>> {
+        vec![Arc::new(self.0), Arc::new(self.1)]
+    }
+}
+
+impl<A: Animation, B: Animation, C: Animation> IntoAnimations for (A, B, C) {
+    fn into_animations(self) -> Vec<Arc<dyn Animation>> {
+        vec![Arc::new(self.0), Arc::new(self.1), Arc::new(self.2)]
+    }
+}
+
+impl IntoAnimations for Vec<Arc<dyn Animation>> {
+    fn into_animations(self) -> Vec<Arc<dyn Animation>> {
+        self
     }
 }

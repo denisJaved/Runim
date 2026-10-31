@@ -18,6 +18,7 @@
 pub mod dispatch;
 pub mod renderer;
 pub mod shapes;
+pub mod animations;
 
 /// The Runim Prelude.
 ///
@@ -33,7 +34,7 @@ pub mod shapes;
 /// This option requires `prefixed_prelude` feature flag to be enabled.
 pub mod prelude {
     pub use super::dispatch::RunimDispatcher;
-    pub use super::shapes::{AnimationConfig, Scene, RIObject, Shape};
+    pub use super::shapes::{AnimationConfig, Scene, RIObject, Shape, Circle, Square};
 
     /// Alternative version of the [runim::prelude] with all re-exports having `RI` prefix.
     ///
@@ -45,5 +46,7 @@ pub mod prelude {
         pub use super::Scene as RIScene;
         pub use super::RIObject;
         pub use super::Shape as RIShape;
+        pub use super::Circle as RICircle;
+        pub use super::Square as RISquare;
     }
 }

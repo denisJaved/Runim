@@ -14,6 +14,7 @@ env_logger = "0.11.11"
 anyhow = "1.0.104"
 image = { version = "0.25.10", default-features = false, features = ["png"]}
 parking_lot = "0.13.0"
+thiserror = "2.0.21"
 
 [features]
 default = ["debugging", "prefixed_prelude"]

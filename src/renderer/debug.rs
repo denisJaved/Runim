@@ -1,7 +1,9 @@
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
+use std::time::Duration;
 use log::info;
+use crate::animations::{Animation, SceneState};
 use crate::dispatch::{Command, CommandCallback, FriendlyRenderer, Renderer};
-use crate::shapes::AnimationConfig;
+use crate::shapes::{AnimationConfig, ObjectDesc};
 
 pub struct DebugRenderer {
     sender: mpsc::Sender<CommandCallback>
@@ -10,6 +12,16 @@ pub struct DebugRenderer {
 impl FriendlyRenderer for DebugRenderer {
     fn begin(&mut self, config: AnimationConfig) -> anyhow::Result<()> {
         info!(target: "runim::R->D", "Begin: {config:?}");
+        Ok(())
+    }
+
+    fn set_scene(&mut self, objects: Vec<ObjectDesc>, base: SceneState) -> anyhow::Result<()> {
+        info!(target: "runim::R->D", "SetScene: {objects:?} {base:?}");
+        Ok(())
+    }
+
+    fn play(&mut self, animations: Vec<Arc<dyn Animation>>, duration: Duration) -> anyhow::Result<()> {
+        info!(target: "runim::R->D", "Play: {animations:?} {duration:?}");
         Ok(())
     }
 
