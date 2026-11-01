@@ -1,14 +1,14 @@
 /// Specifies size and frame rate for Runim rendering.
 ///
 /// # Example
-/// ```ignore
-/// use runim::shapes::AnimationConfig;
+/// ```
+/// use runim::prelude::*;
 ///
 /// let config = AnimationConfig {
 ///     width: 640,
 ///     height: 360,
 ///     fps: 60
-/// }
+/// };
 /// ```
 #[derive(Debug, Clone)]
 pub struct AnimationConfig {

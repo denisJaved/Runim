@@ -24,7 +24,7 @@ pub mod animations;
 ///
 /// The purpose of this module is to alleviate imports of pragmatic Runim types and traits
 /// by adding a glob import in code of Runim API clients:
-/// ```ignore
+/// ```
 /// use runim::prelude::*;
 /// ```
 ///
@@ -34,7 +34,7 @@ pub mod animations;
 /// This option requires `prefixed_prelude` feature flag to be enabled.
 pub mod prelude {
     pub use super::dispatch::RunimDispatcher;
-    pub use super::shapes::{AnimationConfig, Scene, RIObject, Shape, Circle, Square};
+    pub use super::shapes::{AnimationConfig, Scene, RIObject, Shape, Circle, Square, ObjectID};
 
     /// Alternative version of the [runim::prelude] with all re-exports having `RI` prefix.
     ///
@@ -48,5 +48,6 @@ pub mod prelude {
         pub use super::Shape as RIShape;
         pub use super::Circle as RICircle;
         pub use super::Square as RISquare;
+        pub use super::ObjectID as RIObjID;
     }
 }

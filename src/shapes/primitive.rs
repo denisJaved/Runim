@@ -2,7 +2,7 @@ use crate::impl_shape_base;
 use crate::renderer::DrawContext;
 use crate::shapes::{RIObject, Shape};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Square {
     width: f32,
     height: f32
@@ -24,7 +24,7 @@ impl Default for Square {
 }
 
 impl RIObject<Square> {
-    pub fn set_size(&mut self, width: f32, height: f32) -> &mut RIObject<Square> {
+    pub fn set_size(&self, width: f32, height: f32) -> &RIObject<Square> {
         {
             let mut guard = self.shape_mut();
             guard.width = width;
@@ -34,7 +34,7 @@ impl RIObject<Square> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Circle {
     radius: f32
 }
@@ -54,7 +54,7 @@ impl Default for Circle {
 }
 
 impl RIObject<Circle> {
-    pub fn set_radius(&mut self, radius: f32) -> &mut RIObject<Circle> {
+    pub fn set_radius(&self, radius: f32) -> &RIObject<Circle> {
         {
             let mut guard = self.shape_mut();
             guard.radius = radius;
@@ -62,7 +62,7 @@ impl RIObject<Circle> {
         self
     }
 
-    pub fn set_diameter(&mut self, diameter: f32) -> &mut RIObject<Circle> {
+    pub fn set_diameter(&self, diameter: f32) -> &RIObject<Circle> {
         {
             let mut guard = self.shape_mut();
             guard.radius = diameter / 2f32;

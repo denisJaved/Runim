@@ -19,15 +19,15 @@ use crate::animations::Animation;
 /// so clients do not need to provide instances of renderers.
 /// 
 /// # Example
-/// ```ignore
+/// ```
 /// use runim::prelude::*;
 /// use runim::renderer::debug::DebugRenderer;
 ///
 /// // DebugRenderer will be initialized using trait bounds
-/// let dispatcher = RunimDispatcher::<DebugRenderer>::new().unwrap();
+/// let mut dispatcher = RunimDispatcher::<DebugRenderer>::new().unwrap();
 ///
 /// // Prepare renderer
-/// dispatcher.begin(SceneConfig::p1080());
+/// dispatcher.begin(AnimationConfig::p1080());
 /// 
 /// // ... your animation
 /// ```
@@ -75,6 +75,12 @@ impl<R: Renderer> RunimDispatcher<R> {
         self.scenes.insert(scene.id, scene);
         id
     }
+
+    pub fn add_scene(&mut self, scene: Scene) -> ObjectID {
+        let id = scene.id;
+        self.scenes.insert(scene.id, scene);
+        id
+    }
     
     /// Returns **mutable** reference to a [Scene] by its id.
     /// 
@@ -83,17 +89,17 @@ impl<R: Renderer> RunimDispatcher<R> {
     /// than reading them. For immutable references use [RunimDispatcher::scene_imm]
     /// 
     /// # Example
-    /// ```ignore
+    /// ```
     /// use runim::prelude::*;
     /// use runim::renderer::debug::DebugRenderer;
     /// use runim::shapes::ObjectID;
     ///
-    /// let dispatcher = RunimDispatcher::<DebugRenderer>::new().unwrap();
+    /// let mut dispatcher = RunimDispatcher::<DebugRenderer>::new().unwrap();
     ///
-    /// let scene: ObjectID = dispatcher.new_scene();
-    /// dispatcher.scene(scene)
+    /// let mut scene: ObjectID = dispatcher.new_scene();
+    /// dispatcher.scene(&scene)
     ///     .add_square()
-    ///     .set_pos(14, 14);
+    ///     .set_pos(14.0, 14.0);
     /// ```
     pub fn scene(&mut self, id: &ObjectID) -> &mut Scene {
         self.scenes.get_mut(id).expect("unknown scene")
@@ -140,13 +146,13 @@ impl<R: Renderer> RunimDispatcher<R> {
     /// Prepares [Renderer] for rendering. **Must be called exactly once!**
     /// 
     /// Example:
-    /// ```ignore
+    /// ```
     /// use runim::prelude::*;
     /// use runim::renderer::debug::DebugRenderer;
     ///
-    /// let dispatcher = RunimDispatcher::<DebugRenderer>::new().unwrap();
+    /// let mut dispatcher = RunimDispatcher::<DebugRenderer>::new().unwrap();
     /// 
-    /// dispatcher.begin(SceneConfig::p1080());
+    /// dispatcher.begin(AnimationConfig::p1080());
     /// ```
     pub fn begin(&mut self, config: AnimationConfig) {
         self.send(Command::Prepare(config));
@@ -186,7 +192,7 @@ impl Display for DispatchError {
     }
 }
 
-trait IntoAnimations {
+pub trait IntoAnimations {
     fn into_animations(self) -> Vec<Arc<dyn Animation>>;
 }
 

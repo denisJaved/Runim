@@ -30,7 +30,7 @@ impl SceneState {
     
     pub fn with_capacity(capacity: usize) -> SceneState {
         SceneState {
-            objects: HashMap::new()
+            objects: HashMap::with_capacity(capacity)
         }
     }
     
