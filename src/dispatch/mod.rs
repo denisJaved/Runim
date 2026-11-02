@@ -1,14 +1,14 @@
 mod renderer;
 
+use crate::shapes::{AnimationConfig, ObjectID, Scene};
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
 use thiserror::Error;
-use crate::shapes::{AnimationConfig, ObjectID, Scene};
 
 pub use renderer::{Command, CommandCallback, Renderer, FriendlyRenderer};
 use crate::animations::Animation;
@@ -112,8 +112,7 @@ impl<R: Renderer> RunimDispatcher<R> {
     pub fn set_scene(&mut self, id: ObjectID) -> anyhow::Result<()> {
         let scene = self.scenes.get(&id).expect("Unknown scene");
         self.send(Command::SetScene {
-            objects: scene.objects.clone(),
-            base: scene.base.clone()
+            objects: scene.objects.clone()
         });
         self.active_scene = Some(id);
         Ok(())
@@ -136,8 +135,8 @@ impl<R: Renderer> RunimDispatcher<R> {
             duration
         });
         let scene = self.scenes.get_mut(&active).unwrap();
-        for anims in &anims {
-            anims.apply(&mut scene.base, 1.0);
+        for anim in &anims {
+            anim.affected_shapes().apply_all(scene, anim, 1.0);
         }
         scene.clock += duration.as_secs_f64();
         Ok(())

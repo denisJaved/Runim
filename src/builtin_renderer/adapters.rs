@@ -3,7 +3,7 @@
 use std::sync::{mpsc, Arc};
 use std::sync::mpsc::Sender;
 use std::thread;
-use std::thread::{sleep, JoinHandle};
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use log::warn;
 use pollster::block_on;
@@ -12,7 +12,7 @@ use winit::dpi::{PhysicalSize, Size};
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy};
 use winit::window::{Window, WindowId};
-use crate::animations::{Animation, SceneState};
+use crate::animations::Animation;
 use crate::builtin_renderer::graphics::RunimGraphics;
 use crate::dispatch::{Command, CommandCallback, FriendlyRenderer, Renderer};
 use crate::prelude::AnimationConfig;
@@ -113,8 +113,8 @@ impl FriendlyRenderer for LiveRendererApp {
         Ok(())
     }
 
-    fn set_scene(&mut self, objects: Vec<ObjectDesc>, base: SceneState) -> anyhow::Result<()> {
-        self.graphics.as_mut().unwrap().set_scene(objects, base);
+    fn set_scene(&mut self, objects: Vec<ObjectDesc>) -> anyhow::Result<()> {
+        self.graphics.as_mut().unwrap().set_scene(objects);
         Ok(())
     }
 

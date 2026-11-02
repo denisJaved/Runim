@@ -1,12 +1,13 @@
 use glam::Vec3;
 use crate::impl_shape_base;
 use crate::renderer::DrawContext;
-use crate::shapes::{RIObject, Shape};
+use crate::shapes::{RIObject, Shape, Transform2D};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Square {
     width: f32,
-    height: f32
+    height: f32,
+    transform: Transform2D
 }
 impl_shape_base!(Square);
 impl Shape for Square {
@@ -19,13 +20,22 @@ impl Shape for Square {
         ctx.vertex(Vec3::new(self.width, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0));
         ctx.vertex(Vec3::new(0.0, self.height, 0.0), Vec3::new(1.0, 0.0, 0.0));
     }
+
+    fn transform(&self) -> &Transform2D {
+        &self.transform
+    }
+
+    fn transform_mut(&mut self) -> &mut Transform2D {
+        &mut self.transform
+    }
 }
 
 impl Default for Square {
     fn default() -> Self {
         Square {
             width: 1f32,
-            height: 1f32
+            height: 1f32,
+            transform: Transform2D::default()
         }
     }
 }
@@ -43,19 +53,29 @@ impl RIObject<Square> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Circle {
-    radius: f32
+    radius: f32,
+    transform: Transform2D
 }
 impl_shape_base!(Circle);
 impl Shape for Circle {
     fn draw(&self, ctx: &mut DrawContext) {
         todo!()
     }
+
+    fn transform(&self) -> &Transform2D {
+        &self.transform
+    }
+
+    fn transform_mut(&mut self) -> &mut Transform2D {
+        &mut self.transform
+    }
 }
 
 impl Default for Circle {
     fn default() -> Self {
         Circle {
-            radius: 0.5
+            radius: 0.5,
+            transform: Transform2D::default()
         }
     }
 }

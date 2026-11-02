@@ -4,18 +4,42 @@ use anyhow::bail;
 use glam::Vec3;
 use log::{info, warn};
 use wgpu::util::DeviceExt;
+use wgpu::wgt;
 use winit::window::Window;
-use crate::animations::{ObjectVisual, SceneState};
 use crate::builtin_renderer::vertex;
 use crate::builtin_renderer::vertex::Vertex;
 use super::texture::Texture;
 use crate::dbgn;
 use crate::renderer::DrawContextImpl;
-use crate::shapes::{ObjectDesc, Transform2D};
+use crate::shapes::{ObjectDesc};
 
 pub struct RunimState {
-    objects: Vec<ObjectDesc>,
-    base: SceneState
+    objects: Vec<ObjectDesc>
+}
+
+pub struct ResizableBuffer {
+    buffer: wgpu::Buffer,
+    last_size: u32,
+    usage: wgt::BufferUsages
+}
+
+impl ResizableBuffer {
+    pub fn write<T: bytemuck::Pod>(&mut self, device: &mut wgpu::Device, queue: &mut wgpu::Queue, values: &Vec<T>) {
+        let i = values.len() as u32;
+        if i == self.last_size {
+            queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(values.as_slice()));
+            return;
+        }
+        self.buffer.destroy();
+        self.buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: dbgn!("Vertex Buffer").name(),
+                contents: bytemuck::cast_slice(values.as_slice()),
+                usage: self.usage,
+            }
+        );
+        self.last_size = i;
+    }
 }
 
 pub struct RunimGraphics {
@@ -27,7 +51,7 @@ pub struct RunimGraphics {
     is_surface_configured: bool,
     render_pipeline: wgpu::RenderPipeline,
     depth_texture: Texture,
-    vertex_buffer: wgpu::Buffer,
+    vertex_buffer: ResizableBuffer,
     index_buffer: wgpu::Buffer,
     fps: u32,
     state: RunimState
@@ -151,6 +175,11 @@ impl RunimGraphics {
                 usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             }
         );
+        let vertex_buffer = ResizableBuffer {
+            buffer: vertex_buffer,
+            last_size: 3,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        };
         let index_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Index Buffer"),
@@ -217,8 +246,7 @@ impl RunimGraphics {
             index_buffer,
             fps,
             state: RunimState {
-                objects: vec![],
-                base: SceneState::with_capacity(0),
+                objects: vec![]
             }
         })
     }
@@ -249,6 +277,19 @@ impl RunimGraphics {
 
         if !self.is_surface_configured {
             return Ok(());
+        }
+
+        let mut ctx: Box<dyn DrawContextImpl> = Box::new(RunimDrawContext::new());
+
+        for obj in self.state.objects.iter() {
+            let guard = obj.shape.read();
+            guard.draw(&mut ctx);
+        }
+        let x = ctx.as_any_mut().downcast_mut::<RunimDrawContext>()
+            .unwrap();
+        let is_empty = x.vertices.is_empty();
+        if !is_empty {
+            self.vertex_buffer.write(&mut self.device, &mut self.queue, &x.vertices);
         }
 
         let output = match self.surface.get_current_texture() {
@@ -299,50 +340,12 @@ impl RunimGraphics {
             multiview_mask: None,
         });
 
-        // render_pass.set_pipeline(&self.render_pipeline);
-        // render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        // render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        // render_pass.draw_indexed(0..4, 0, 0..1);
-
-        let mut ctx: Box<dyn DrawContextImpl> = Box::new(RunimDrawContext::new(Transform2D::default()));
-
-        for obj in self.state.objects.iter() {
-            let visual = match self.state.base.get(obj.id) {
-                Some(v) => v,
-                None => {
-                    warn!("Object without visual data");
-                    continue
-                }
-            };
-            let visual_guard = visual.read();
-
-            let x = ctx.as_any_mut().downcast_mut::<RunimDrawContext>()
-                .unwrap();
-            x.transform2d.pos.x = visual_guard.transform.pos.x;
-            x.transform2d.pos.y = visual_guard.transform.pos.y;
-            x.vertices.clear();
-            drop(visual_guard);
-
-            let guard = obj.shape.read();
-            guard.draw(&mut ctx);
-
-            let x = ctx.as_any_mut().downcast_mut::<RunimDrawContext>()
-                .unwrap();
-            for i in 0..x.vertices.len() {
-                if i % 3 != 0 { continue; }
-
-                let v0: &Vertex = x.vertices.get(i).unwrap();
-                let v1: &Vertex = x.vertices.get(i + 1).unwrap();
-                let v2: &Vertex = x.vertices.get(i + 2).unwrap();
-                self.queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&[
-                    v0.clone(), v1.clone(), v2.clone()
-                ]));
-
-                render_pass.set_pipeline(&self.render_pipeline);
-                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-                render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                render_pass.draw_indexed(0..4, 0, 0..1);
-            }
+        if !is_empty {
+            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.buffer.slice(..));
+            /*render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..4, 0, 0..1);*/
+            render_pass.draw(0..self.vertex_buffer.last_size, 0..1);
         }
 
         drop(render_pass);
@@ -358,35 +361,46 @@ impl RunimGraphics {
         self.fps
     }
 
-    pub fn set_scene(&mut self, objects: Vec<ObjectDesc>, base: SceneState) {
+    pub fn set_scene(&mut self, objects: Vec<ObjectDesc>) {
         self.state.objects = objects;
-        self.state.base = base;
     }
 }
 
 #[derive(Debug)]
 struct RunimDrawContext {
-    transform2d: Transform2D,
+    offset: Vec3,
     vertices: Vec<Vertex>
 }
 
 impl RunimDrawContext {
-    pub fn new(transform: Transform2D) -> RunimDrawContext {
+    pub fn new() -> RunimDrawContext {
         RunimDrawContext {
-            transform2d: transform,
+            offset: Vec3::ZERO,
             vertices: vec![],
         }
     }
 }
 
 impl DrawContextImpl for RunimDrawContext {
+    fn offset(&mut self, pos: Vec3) {
+        self.offset = pos;
+    }
+
+    fn clear_offset(&mut self) {
+        self.offset = Vec3::ZERO;
+    }
+
     fn vertex(&mut self, mut pos: Vec3, color: Vec3) {
-        pos.x += self.transform2d.pos.x;
-        pos.y += self.transform2d.pos.y;
+        pos.x += self.offset.x;
+        pos.y += self.offset.y;
         self.vertices.push(Vertex {
             position: pos.to_array(),
             color: color.to_array()
         });
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
     fn as_any_mut(&mut self) -> &mut dyn Any {

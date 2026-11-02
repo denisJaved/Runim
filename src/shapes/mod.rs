@@ -36,9 +36,11 @@ macro_rules! impl_shape_base {
 
 pub trait Shape: ShapeBase + Debug + Send + Sync + 'static {
     fn draw(&self, ctx: &mut DrawContext);
+    fn transform(&self) -> &Transform2D;
+    fn transform_mut(&mut self) -> &mut Transform2D;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Transform2D {
     pub pos: Vec2,
     pub rot: f32

@@ -1,6 +1,6 @@
 use std::sync::{mpsc, Arc};
 use std::time::Duration;
-use crate::animations::{Animation, SceneState};
+use crate::animations::Animation;
 use crate::shapes::{AnimationConfig, ObjectDesc};
 
 pub trait Renderer: Send + 'static {
@@ -11,7 +11,7 @@ pub trait Renderer: Send + 'static {
 
 pub trait FriendlyRenderer: Renderer + Send + 'static {
     fn begin(&mut self, config: AnimationConfig) -> anyhow::Result<()>;
-    fn set_scene(&mut self, objects: Vec<ObjectDesc>, base: SceneState) -> anyhow::Result<()>;
+    fn set_scene(&mut self, objects: Vec<ObjectDesc>) -> anyhow::Result<()>;
     fn play(&mut self, animations: Vec<Arc<dyn Animation>>, duration: Duration) -> anyhow::Result<()>;
     fn send(&mut self, callback: CommandCallback);
 
@@ -21,10 +21,9 @@ pub trait FriendlyRenderer: Renderer + Send + 'static {
                 self.begin(config)
             }
             Command::SetScene {
-                objects,
-                base
+                objects
             } => {
-                self.set_scene(objects, base)
+                self.set_scene(objects)
             }
             Command::Play {
                 animations,
@@ -44,8 +43,7 @@ pub trait FriendlyRenderer: Renderer + Send + 'static {
 pub enum Command {
     Prepare(AnimationConfig),
     SetScene {
-        objects: Vec<ObjectDesc>,
-        base: SceneState,
+        objects: Vec<ObjectDesc>
     },
     Play {
         animations: Vec<Arc<dyn Animation>>,

@@ -1,5 +1,4 @@
 use std::marker::PhantomData;
-use crate::animations::{ObjectVisual, SceneState};
 use crate::shapes::{Circle, ObjectID, Shape, Square};
 use glam::Vec2;
 use parking_lot::{MappedRwLockReadGuard, MappedRwLockWriteGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -8,7 +7,6 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 static SCENE_ID: AtomicU32 = AtomicU32::new(0);
 type SharedShape  = Arc<RwLock<Box<dyn Shape>>>;
-type SharedVisual = Arc<RwLock<ObjectVisual>>;
 
 /// Stores shapes and other elements rendered in a Runim animation.
 ///
@@ -32,7 +30,6 @@ type SharedVisual = Arc<RwLock<ObjectVisual>>;
 pub struct Scene {
     pub(crate) id: ObjectID,
     pub(crate) objects: Vec<ObjectDesc>,
-    pub(crate) base: SceneState,
     pub(crate) next_id: ObjectID,
     pub(crate) clock: f64
 }
@@ -53,7 +50,6 @@ impl Scene {
         Scene {
             id: SCENE_ID.fetch_add(1, Ordering::Release),
             objects: Vec::new(),
-            base: SceneState::new(),
             next_id: 0,
             clock: 0f64,
         }
@@ -79,7 +75,6 @@ impl Scene {
         Scene {
             id: SCENE_ID.fetch_add(1, Ordering::Release),
             objects: Vec::with_capacity(capacity),
-            base: SceneState::with_capacity(capacity),
             next_id: 0,
             clock: 0f64,
         }
@@ -92,19 +87,15 @@ impl Scene {
         self.next_id += 1;
 
         let shape: SharedShape = Arc::new(RwLock::new(Box::new(shape)));
-        let visual: SharedVisual = Arc::new(RwLock::new(ObjectVisual::default()));
 
         self.objects.push(ObjectDesc {
             id,
-            shape: Arc::clone(&shape),
-            visual: Arc::clone(&visual)
+            shape: Arc::clone(&shape)
         });
-        self.base.insert(id, Arc::clone(&visual));
 
         RIObject {
             id,
             shape,
-            visual,
             __marker: PhantomData
         }
     }
@@ -169,9 +160,13 @@ impl Scene {
         Some(RIObject::<S> {
             id,
             shape: Arc::clone(&desc.shape),
-            visual: Arc::clone(&desc.visual),
             __marker: PhantomData
         })
+    }
+
+    pub(crate) fn get_raw(&self, id: ObjectID) -> Option<SharedShape> {
+        let desc = self.objects.iter().find(|i| i.id == id)?;
+        Some(desc.shape.clone())
     }
 
     /// Removes [Shape] from scene by its id.
@@ -207,8 +202,7 @@ impl Default for Scene {
 #[derive(Debug, Clone)]
 pub struct ObjectDesc {
     pub id: ObjectID,
-    pub shape: SharedShape,
-    pub visual: SharedVisual
+    pub shape: SharedShape
 }
 
 /// Handle to [Shape] in a [Scene]. RIObjects never require mutability,
@@ -234,7 +228,6 @@ pub struct ObjectDesc {
 pub struct RIObject<T: Shape> {
     id: ObjectID,
     shape: SharedShape,
-    visual: SharedVisual,
     __marker: PhantomData<T>
 }
 
@@ -255,7 +248,7 @@ impl<T: Shape> RIObject<T> {
     ///     .set_pos(10.0, 10.0);
     /// ```
     pub fn set_pos(&self, x: f32, y: f32) -> &RIObject<T> {
-        self.visual.write().transform.pos = Vec2::new(x, y);
+        self.shape.write().transform_mut().pos = Vec2::new(x, y);
         self
     }
 

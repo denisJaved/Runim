@@ -1,7 +1,7 @@
 use std::sync::{mpsc, Arc};
 use std::time::Duration;
 use log::info;
-use crate::animations::{Animation, SceneState};
+use crate::animations::Animation;
 use crate::dispatch::{Command, CommandCallback, FriendlyRenderer, Renderer};
 use crate::shapes::{AnimationConfig, ObjectDesc};
 
@@ -15,8 +15,8 @@ impl FriendlyRenderer for DebugRenderer {
         Ok(())
     }
 
-    fn set_scene(&mut self, objects: Vec<ObjectDesc>, base: SceneState) -> anyhow::Result<()> {
-        info!(target: "runim::D->R", "SetScene: {objects:?} {base:?}");
+    fn set_scene(&mut self, objects: Vec<ObjectDesc>) -> anyhow::Result<()> {
+        info!(target: "runim::D->R", "SetScene: {objects:?}");
         Ok(())
     }
 
