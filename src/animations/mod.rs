@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::sync::Arc;
 use std::time::Duration;
+use parking_lot::RwLock;
 use crate::shapes::{ObjectID, Transform2D};
 
 #[derive(Debug, Clone)]
@@ -18,7 +20,7 @@ impl Default for ObjectVisual {
 
 #[derive(Debug, Clone)]
 pub struct SceneState {
-    objects: HashMap<ObjectID, ObjectVisual>
+    objects: HashMap<ObjectID, Arc<RwLock<ObjectVisual>>>
 }
 
 impl SceneState {
@@ -34,15 +36,11 @@ impl SceneState {
         }
     }
     
-    pub fn get(&self, id: ObjectID) -> Option<&ObjectVisual> {
+    pub fn get(&self, id: ObjectID) -> Option<&Arc<RwLock<ObjectVisual>>> {
         self.objects.get(&id)
     }
     
-    pub fn get_mut(&mut self, id: ObjectID) -> Option<&mut ObjectVisual> {
-        self.objects.get_mut(&id)
-    }
-    
-    pub fn insert(&mut self, id: ObjectID, v: ObjectVisual) {
+    pub fn insert(&mut self, id: ObjectID, v: Arc<RwLock<ObjectVisual>>) {
         self.objects.insert(id, v);
     }
 }

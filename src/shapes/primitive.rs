@@ -1,3 +1,4 @@
+use glam::Vec3;
 use crate::impl_shape_base;
 use crate::renderer::DrawContext;
 use crate::shapes::{RIObject, Shape};
@@ -10,7 +11,13 @@ pub struct Square {
 impl_shape_base!(Square);
 impl Shape for Square {
     fn draw(&self, ctx: &mut DrawContext) {
-        todo!()
+        ctx.vertex(Vec3::new(self.width, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
+        ctx.vertex(Vec3::new(self.width, self.height, 0.0), Vec3::new(0.0, 1.0, 0.0));
+        ctx.vertex(Vec3::new(0.0, self.height, 0.0), Vec3::new(0.0, 1.0, 0.0));
+
+        ctx.vertex(Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0));
+        ctx.vertex(Vec3::new(self.width, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0));
+        ctx.vertex(Vec3::new(0.0, self.height, 0.0), Vec3::new(1.0, 0.0, 0.0));
     }
 }
 

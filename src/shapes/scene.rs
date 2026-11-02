@@ -99,6 +99,7 @@ impl Scene {
             shape: Arc::clone(&shape),
             visual: Arc::clone(&visual)
         });
+        self.base.insert(id, Arc::clone(&visual));
 
         RIObject {
             id,

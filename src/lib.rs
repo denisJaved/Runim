@@ -19,7 +19,8 @@ pub mod dispatch;
 pub mod renderer;
 pub mod shapes;
 pub mod animations;
-
+#[cfg(feature = "builtin_renderer")]
+pub mod builtin_renderer;
 /// The Runim Prelude.
 ///
 /// The purpose of this module is to alleviate imports of pragmatic Runim types and traits
@@ -35,6 +36,9 @@ pub mod animations;
 pub mod prelude {
     pub use super::dispatch::RunimDispatcher;
     pub use super::shapes::{AnimationConfig, Scene, RIObject, Shape, Circle, Square, ObjectID};
+    
+    #[cfg(feature = "builtin_renderer")]
+    pub use super::builtin_renderer::LivePreviewRenderer;
 
     /// Alternative version of the [runim::prelude] with all re-exports having `RI` prefix.
     ///
@@ -49,5 +53,8 @@ pub mod prelude {
         pub use super::Circle as RICircle;
         pub use super::Square as RISquare;
         pub use super::ObjectID as RIObjID;
+
+        #[cfg(feature = "builtin_renderer")]
+        pub use super::LivePreviewRenderer as RILivePreviewRenderer;
     }
 }
