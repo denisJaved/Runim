@@ -1,5 +1,6 @@
 use std::any::Any;
 use glam::Vec3;
+use crate::shapes::Color;
 
 pub type DrawContext = Box<dyn DrawContextImpl>;
 
@@ -8,7 +9,7 @@ pub trait DrawContextImpl: Any {
     
     fn clear_offset(&mut self);
     
-    fn vertex(&mut self, pos: Vec3, color: Vec3);
+    fn vertex(&mut self, pos: Vec3, color: Color);
 
     fn as_any(&self) -> &dyn Any;
     

@@ -7,5 +7,6 @@ mod debug;
 mod texture;
 mod vertex;
 mod adapters;
+mod camera;
 
 pub use adapters::LivePreviewRenderer;

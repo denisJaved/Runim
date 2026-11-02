@@ -10,19 +10,24 @@ pub struct DebugRenderer {
 }
 
 impl FriendlyRenderer for DebugRenderer {
-    fn begin(&mut self, config: AnimationConfig) -> anyhow::Result<()> {
+    fn begin(&mut self, config: AnimationConfig) -> anyhow::Result<CommandCallback> {
         info!(target: "runim::D->R", "Begin: {config:?}");
-        Ok(())
+        Ok(CommandCallback::Ok)
     }
 
-    fn set_scene(&mut self, objects: Vec<ObjectDesc>) -> anyhow::Result<()> {
+    fn set_scene(&mut self, objects: Vec<ObjectDesc>) -> anyhow::Result<CommandCallback> {
         info!(target: "runim::D->R", "SetScene: {objects:?}");
-        Ok(())
+        Ok(CommandCallback::Ok)
     }
 
-    fn play(&mut self, animations: Vec<Arc<dyn Animation>>, duration: Duration) -> anyhow::Result<()> {
+    fn play(&mut self, animations: Vec<Arc<dyn Animation>>, duration: Duration) -> anyhow::Result<CommandCallback> {
         info!(target: "runim::D->R", "Play: {animations:?} {duration:?}");
-        Ok(())
+        Ok(CommandCallback::Ok)
+    }
+
+    fn shutdown(&mut self) -> anyhow::Result<CommandCallback> {
+        info!(target: "runim::D->R", "Shutdown");
+        Ok(CommandCallback::Ok)
     }
 
     fn send(&mut self, callback: CommandCallback) {

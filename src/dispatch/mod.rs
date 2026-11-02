@@ -6,8 +6,9 @@ use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
 use std::sync::{Arc, mpsc};
 use std::thread;
-use std::thread::JoinHandle;
+use std::thread::{sleep, JoinHandle};
 use std::time::Duration;
+use log::info;
 use thiserror::Error;
 
 pub use renderer::{Command, CommandCallback, Renderer, FriendlyRenderer};
@@ -164,8 +165,18 @@ impl<R: Renderer> RunimDispatcher<R> {
             CommandCallback::FatalError(e) => {
                 panic!("{e}");
             }
+            CommandCallback::Wait(d) => {
+                sleep(d)
+            }
             CommandCallback::Ok => {}
         }
+    }
+}
+
+impl<R: Renderer> Drop for RunimDispatcher<R> {
+    fn drop(&mut self) {
+        info!("Destroying renderer, because dispatcher was dropped");
+        self.send(Command::Shutdown);
     }
 }
 

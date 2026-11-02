@@ -102,7 +102,7 @@ impl Renderer for LiveRendererApp {
 }
 
 impl FriendlyRenderer for LiveRendererApp {
-    fn begin(&mut self, config: AnimationConfig) -> anyhow::Result<()> {
+    fn begin(&mut self, config: AnimationConfig) -> anyhow::Result<CommandCallback> {
         let window = self.window.clone().unwrap();
         let mut graphics = block_on(RunimGraphics::new(
             window,
@@ -110,17 +110,24 @@ impl FriendlyRenderer for LiveRendererApp {
         ))?;
         graphics.resize(config.width, config.height);
         self.graphics = Some(graphics);
-        Ok(())
+        Ok(CommandCallback::Ok)
     }
 
-    fn set_scene(&mut self, objects: Vec<ObjectDesc>) -> anyhow::Result<()> {
+    fn set_scene(&mut self, objects: Vec<ObjectDesc>) -> anyhow::Result<CommandCallback> {
         self.graphics.as_mut().unwrap().set_scene(objects);
-        Ok(())
+        Ok(CommandCallback::Ok)
     }
 
-    fn play(&mut self, animations: Vec<Arc<dyn Animation>>, duration: Duration) -> anyhow::Result<()> {
+    fn play(&mut self, animations: Vec<Arc<dyn Animation>>, duration: Duration) -> anyhow::Result<CommandCallback> {
         //sleep(duration);
-        Ok(())
+        self.graphics.as_mut().unwrap().set_animations(animations);
+        Ok(CommandCallback::Wait(duration))
+    }
+
+    fn shutdown(&mut self) -> anyhow::Result<CommandCallback> {
+        self.window = None;
+        self.graphics = None;
+        Ok(CommandCallback::Ok)
     }
 
     fn send(&mut self, callback: CommandCallback) {
@@ -134,17 +141,23 @@ impl ApplicationHandler<Command> for LiveRendererApp {
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, command: Command) {
-        if let Command::Prepare(config) = &command {
-            let mut attr = Window::default_attributes();
-            attr.title = String::from("Runium live preview");
-            attr.resizable = false;
-            attr.inner_size = Some(Size::Physical(PhysicalSize {
-                width: config.width,
-                height: config.height
-            }));
+        match &command {
+            Command::Prepare(config) => {
+                let mut attr = Window::default_attributes();
+                attr.title = String::from("Runium live preview");
+                attr.resizable = false;
+                attr.inner_size = Some(Size::Physical(PhysicalSize {
+                    width: config.width,
+                    height: config.height
+                }));
 
-            let window = event_loop.create_window(attr).unwrap();  // TODO: Handle properly
-            self.window = Some(Arc::new(window));
+                let window = event_loop.create_window(attr).unwrap();  // TODO: Handle properly
+                self.window = Some(Arc::new(window));
+            }
+            Command::Shutdown => {
+                event_loop.exit();
+            }
+            _ => {}
         }
         FriendlyRenderer::execute(self, command)
     }
@@ -159,9 +172,9 @@ impl ApplicationHandler<Command> for LiveRendererApp {
         match event {
             RedrawRequested => {
                 let now = Instant::now();
-                //let dt = now - self.last_render;
+                let dt = now - self.last_render;
                 self.last_render = now;
-                state.render().unwrap(); // TODO: Proper error handling
+                state.render(dt).unwrap(); // TODO: Proper error handling
             }
             Resized(_) => {
                 warn!("Runim live renderer window can't be resized");

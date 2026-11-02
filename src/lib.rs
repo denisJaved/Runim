@@ -35,7 +35,7 @@ pub mod builtin_renderer;
 /// This option requires `prefixed_prelude` feature flag to be enabled.
 pub mod prelude {
     pub use super::dispatch::RunimDispatcher;
-    pub use super::shapes::{AnimationConfig, Scene, RIObject, Shape, Circle, Square, ObjectID};
+    pub use super::shapes::{AnimationConfig, Scene, RIObject, Shape, Circle, Square, ObjectID, Color};
     
     #[cfg(feature = "builtin_renderer")]
     pub use super::builtin_renderer::LivePreviewRenderer;
@@ -53,6 +53,7 @@ pub mod prelude {
         pub use super::Circle as RICircle;
         pub use super::Square as RISquare;
         pub use super::ObjectID as RIObjID;
+        pub use super::Color as RIColor;
 
         #[cfg(feature = "builtin_renderer")]
         pub use super::LivePreviewRenderer as RILivePreviewRenderer;

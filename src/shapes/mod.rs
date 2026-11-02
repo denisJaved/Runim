@@ -1,6 +1,7 @@
 mod animation;
 mod scene;
 mod primitive;
+mod color;
 
 use std::any::Any;
 use std::fmt::Debug;
@@ -10,6 +11,7 @@ use crate::renderer::DrawContext;
 pub use scene::{Scene, RIObject};
 pub use primitive::{Square, Circle};
 pub use animation::AnimationConfig;
+pub use color::{Color, ColoredShape};
 pub(crate) use scene::ObjectDesc;
 
 pub type ObjectID = u32;
@@ -17,6 +19,7 @@ pub type ObjectID = u32;
 pub trait ShapeBase {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
+    fn clone_raw(&self) -> Box<dyn Shape>;
 }
 
 #[macro_export]
@@ -29,6 +32,9 @@ macro_rules! impl_shape_base {
             }
             fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
                 self
+            }
+            fn clone_raw(&self) -> Box<dyn crate::shapes::Shape> {
+                Box::new(core::clone::Clone::clone(self))
             }
         }
     };

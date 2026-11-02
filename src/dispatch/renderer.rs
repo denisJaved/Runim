@@ -10,9 +10,10 @@ pub trait Renderer: Send + 'static {
 }
 
 pub trait FriendlyRenderer: Renderer + Send + 'static {
-    fn begin(&mut self, config: AnimationConfig) -> anyhow::Result<()>;
-    fn set_scene(&mut self, objects: Vec<ObjectDesc>) -> anyhow::Result<()>;
-    fn play(&mut self, animations: Vec<Arc<dyn Animation>>, duration: Duration) -> anyhow::Result<()>;
+    fn begin(&mut self, config: AnimationConfig) -> anyhow::Result<CommandCallback>;
+    fn set_scene(&mut self, objects: Vec<ObjectDesc>) -> anyhow::Result<CommandCallback>;
+    fn play(&mut self, animations: Vec<Arc<dyn Animation>>, duration: Duration) -> anyhow::Result<CommandCallback>;
+    fn shutdown(&mut self) -> anyhow::Result<CommandCallback>;
     fn send(&mut self, callback: CommandCallback);
 
     fn execute(&mut self, command: Command) {
@@ -34,6 +35,9 @@ pub trait FriendlyRenderer: Renderer + Send + 'static {
             Command::Wait(duration ) => {
                 self.play(vec![], duration)
             }
+            Command::Shutdown => {
+                self.shutdown()
+            }
         };
         self.send(CommandCallback::from_result(res));
     }
@@ -49,19 +53,21 @@ pub enum Command {
         animations: Vec<Arc<dyn Animation>>,
         duration: Duration
     },
-    Wait(Duration)
+    Wait(Duration),
+    Shutdown
 }
 
 #[derive(Debug)]
 pub enum CommandCallback {
     FatalError(anyhow::Error),
+    Wait(Duration),
     Ok
 }
 
 impl CommandCallback {
-    fn from_result(result: anyhow::Result<()>) -> CommandCallback {
+    fn from_result(result: anyhow::Result<CommandCallback>) -> CommandCallback {
         match result {
-            Ok(_) => CommandCallback::Ok,
+            Ok(v) => v,
             Err(e) => CommandCallback::FatalError(e)
         }
     }

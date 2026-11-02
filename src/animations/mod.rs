@@ -7,7 +7,7 @@ use crate::prelude::{ObjectID, Scene, Shape};
 
 #[repr(transparent)]
 pub struct DynamicShape<'a> {
-    state: &'a mut Box<dyn Shape>
+    pub(crate) state: &'a mut Box<dyn Shape>
 }
 
 impl DynamicShape<'_> {

@@ -1,20 +1,40 @@
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use anyhow::bail;
 use glam::Vec3;
 use log::{info, warn};
 use wgpu::util::DeviceExt;
 use wgpu::wgt;
 use winit::window::Window;
+use crate::animations::{AffectedShapes, Animation, DynamicShape};
+use crate::builtin_renderer::camera::{CameraUniform, Projection};
 use crate::builtin_renderer::vertex;
 use crate::builtin_renderer::vertex::Vertex;
 use super::texture::Texture;
 use crate::dbgn;
 use crate::renderer::DrawContextImpl;
-use crate::shapes::{ObjectDesc};
+use crate::shapes::{Color, ObjectDesc, ObjectID};
 
 pub struct RunimState {
-    objects: Vec<ObjectDesc>
+    objects: Vec<ObjectDesc>,
+    animation_cache: HashMap<ObjectID, AnimationState>
+}
+
+#[derive(Clone, Debug)]
+pub struct AnimationState {
+    animation: Arc<dyn Animation>,
+    passed: f64
+}
+
+impl AnimationState {
+    pub fn new(arc: Arc<dyn Animation>) -> AnimationState {
+        AnimationState {
+            animation: arc,
+            passed: 0.0,
+        }
+    }
 }
 
 pub struct ResizableBuffer {
@@ -54,7 +74,11 @@ pub struct RunimGraphics {
     vertex_buffer: ResizableBuffer,
     index_buffer: wgpu::Buffer,
     fps: u32,
-    state: RunimState
+    state: RunimState,
+    camera_buffer: wgpu::Buffer,
+    camera_bind_group: wgpu::BindGroup,
+    projection: Projection,
+    camera_uniform: CameraUniform
 }
 
 impl RunimGraphics {
@@ -124,6 +148,10 @@ impl RunimGraphics {
             view_formats: vec![],
         };
 
+        let projection = Projection::new(size.width, size.height);
+        let mut camera_uniform = CameraUniform::new();
+        camera_uniform.update_proj(&projection);
+
         let depth_texture = Texture::create_depth_texture(
             &device, &config, dbgn!("Depth Texture").name()
         );
@@ -155,15 +183,6 @@ impl RunimGraphics {
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
         });
 
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: dbgn!("Render Pipeline Layout").name(),
-                bind_group_layouts: &[
-                    //Some(&texture_bind_group_layout),
-                ],
-                immediate_size: 0,
-            });
-
         let vertex_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: dbgn!("Vertex Buffer").name(),
@@ -182,11 +201,49 @@ impl RunimGraphics {
         };
         let index_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
-                label: Some("Index Buffer"),
+                label: dbgn!("Index Buffer").name(),
                 contents: bytemuck::cast_slice(&[0u16, 1u16, 2u16]),
                 usage: wgpu::BufferUsages::INDEX,
             }
         );
+        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: dbgn!("Camera Buffer").name(),
+            contents: bytemuck::cast_slice(&[camera_uniform]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let camera_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: Some("camera_bind_group_layout"),
+            });
+
+        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &camera_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: camera_buffer.as_entire_binding(),
+            }],
+            label: Some("camera_bind_group"),
+        });
+
+        let render_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: dbgn!("Render Pipeline Layout").name(),
+                bind_group_layouts: &[
+                    Some(&camera_bind_group_layout),
+                ],
+                immediate_size: 0,
+            });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: dbgn!("Render Pipeline").name(),
@@ -246,8 +303,13 @@ impl RunimGraphics {
             index_buffer,
             fps,
             state: RunimState {
-                objects: vec![]
-            }
+                objects: vec![],
+                animation_cache: HashMap::new()
+            },
+            camera_buffer,
+            camera_bind_group,
+            projection,
+            camera_uniform
         })
     }
 
@@ -271,7 +333,7 @@ impl RunimGraphics {
         }
     }
 
-    pub fn render(&mut self) -> anyhow::Result<()> {
+    pub fn render(&mut self, dt: Duration) -> anyhow::Result<()> {
         use wgpu::CurrentSurfaceTexture::*;
         self.window.request_redraw();
 
@@ -280,9 +342,21 @@ impl RunimGraphics {
         }
 
         let mut ctx: Box<dyn DrawContextImpl> = Box::new(RunimDrawContext::new());
+        let seconds = dt.as_secs_f64();
 
         for obj in self.state.objects.iter() {
             let guard = obj.shape.read();
+            if let Some(anim) = self.state.animation_cache.get_mut(&obj.id) {
+                let mut shape = guard.clone_raw();
+                let mut dynamic = DynamicShape {
+                    state: &mut shape,
+                };
+                anim.passed += seconds;
+                let total = anim.animation.duration().as_secs_f64();
+                anim.animation.apply(&mut dynamic, (anim.passed / total).min(1.0));
+                shape.draw(&mut ctx);
+                continue;
+            }
             guard.draw(&mut ctx);
         }
         let x = ctx.as_any_mut().downcast_mut::<RunimDrawContext>()
@@ -290,6 +364,7 @@ impl RunimGraphics {
         let is_empty = x.vertices.is_empty();
         if !is_empty {
             self.vertex_buffer.write(&mut self.device, &mut self.queue, &x.vertices);
+            self.queue.submit([]);
         }
 
         let output = match self.surface.get_current_texture() {
@@ -342,6 +417,7 @@ impl RunimGraphics {
 
         if !is_empty {
             render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.buffer.slice(..));
             /*render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..4, 0, 0..1);*/
@@ -363,6 +439,22 @@ impl RunimGraphics {
 
     pub fn set_scene(&mut self, objects: Vec<ObjectDesc>) {
         self.state.objects = objects;
+    }
+    
+    pub fn set_animations(&mut self, animations: Vec<Arc<dyn Animation>>) {
+        self.state.animation_cache.clear();
+        for x in animations {
+            match x.affected_shapes() {
+                AffectedShapes::Single(s) => {
+                    self.state.animation_cache.insert(*s, AnimationState::new(x));
+                }
+                AffectedShapes::Vector(v) => {
+                    for s in v {
+                        self.state.animation_cache.insert(*s, AnimationState::new(x.clone()));
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -390,9 +482,10 @@ impl DrawContextImpl for RunimDrawContext {
         self.offset = Vec3::ZERO;
     }
 
-    fn vertex(&mut self, mut pos: Vec3, color: Vec3) {
+    fn vertex(&mut self, mut pos: Vec3, color: Color) {
         pos.x += self.offset.x;
         pos.y += self.offset.y;
+        pos.z -= 1f32;
         self.vertices.push(Vertex {
             position: pos.to_array(),
             color: color.to_array()
