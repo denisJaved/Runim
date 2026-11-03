@@ -350,6 +350,7 @@ impl RunimGraphics {
                 let mut shape = guard.clone_raw();
                 let mut dynamic = DynamicShape {
                     state: &mut shape,
+                    id: obj.id,
                 };
                 anim.passed += seconds;
                 let total = anim.animation.duration();

@@ -17,9 +17,9 @@ pub use color::{RGBColorTween, HSVColorTween};
 pub use compositors::{SequentialCompositor, ParallelCompositor};
 pub use transform::{MoveAnimation};
 
-#[repr(transparent)]
 pub struct DynamicShape<'a> {
-    pub(crate) state: &'a mut Box<dyn Shape>
+    pub(crate) state: &'a mut Box<dyn Shape>,
+    pub(crate) id: ObjectID
 }
 
 impl DynamicShape<'_> {
@@ -29,6 +29,10 @@ impl DynamicShape<'_> {
 
     pub fn as_mut<T: Shape>(&mut self) -> Option<&mut T> {
         self.state.as_any_mut().downcast_mut::<T>()
+    }
+    
+    pub fn id(&self) -> &ObjectID {
+        &self.id
     }
 }
 
@@ -98,6 +102,8 @@ pub trait AnimationCompositor: Animation {
     /// Animation [  RED -> BLUE  ] [ BLUE -> GREEN ] [ GREEN -> RED  ]
     /// ```
     /// Meaning animations will play one after another without overlapping.
+    /// 
+    /// See [SequentialCompositor] for more information.
     fn then<A: Animation>(self, other: A) -> SequentialCompositor where Self: Sized {
         let mut v: Vec<Arc<dyn Animation>> = Vec::with_capacity(2);
         v.push(Arc::new(self));
@@ -133,6 +139,8 @@ pub trait AnimationCompositor: Animation {
     /// Meaning animations will play simultaneously.
     ///
     /// Red to blue animation will stop earlier, because its duration is shorter.
+    /// 
+    /// See [ParallelCompositor] for more information.
     fn with<A: Animation>(self, other: A) -> ParallelCompositor where Self: Sized {
         let mut v: Vec<Arc<dyn Animation>> = Vec::with_capacity(2);
         v.push(Arc::new(self));
@@ -209,22 +217,23 @@ impl AffectedShapes {
     pub(crate) fn apply_all(&self, scene: &mut Scene, animation: &Arc<dyn Animation>, d: f64) {
         match self {
             AffectedShapes::Single(s) => {
-                Self::animate(scene.get_raw(*s), animation, d);
+                Self::animate(scene.get_raw(*s), *s, animation, d);
             }
             AffectedShapes::Vector(s) => {
                 for x in s {
-                    Self::animate(scene.get_raw(*x), animation, d);
+                    Self::animate(scene.get_raw(*x), *x, animation, d);
                 }
             }
         }
     }
 
-    pub(crate) fn animate(shape: Option<Arc<RwLock<Box<dyn Shape>>>>, animation: &Arc<dyn Animation>, d: f64) {
+    fn animate(shape: Option<Arc<RwLock<Box<dyn Shape>>>>, id: ObjectID, animation: &Arc<dyn Animation>, d: f64) {
         match shape {
             Some(s) => {
                 let mut guard = s.write();
                 let mut untyped = DynamicShape {
                     state: &mut guard,
+                    id
                 };
                 animation.apply(&mut untyped, d);
                 drop(guard);
