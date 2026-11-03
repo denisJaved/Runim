@@ -1,15 +1,21 @@
 [package]
 name = "runim"
-version = "0.1.0"
+version = "0.0.0-alpha1"
 edition = "2024"
 license = "MIT or Apache-2.0"
+description = "Math animation rendering library"
+repository = "https://github.com/denisJaved/Runim/"
+keywords = ["graphics", "math", "video"]
+categories = ["graphics", "rendering::engine", "visualization"]
+documentation = "https://docs.rs/runim"
+readme = false
+exclude = [".idea", ".idea/**"]
 
 [dependencies]
-runim-derive = { path = "runim-derive" }
+runim-derive = { path = "runim-derive", version = "0.0.0-alpha1" }
 
 glam = { version = "0.34.1"}
 log = "0.4.34"
-env_logger = "0.11.11"
 anyhow = "1.0.104"
 parking_lot = "0.13.0"
 thiserror = "2.0.21"
