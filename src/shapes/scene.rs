@@ -1,5 +1,5 @@
 use std::marker::PhantomData;
-use crate::shapes::{Circle, ObjectID, Shape, Square};
+use runim::shapes::{Circle, ObjectID, Shape, Rectangle};
 use glam::Vec2;
 use parking_lot::{MappedRwLockReadGuard, MappedRwLockWriteGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::sync::Arc;
@@ -65,11 +65,11 @@ impl Scene {
     /// use runim::prelude::*;
     ///
     /// let mut scene = Scene::with_capacity(3);
-    /// scene.add_square(); // no resizes
-    /// scene.add_square(); // no resizes
-    /// scene.add_square(); // no resizes
+    /// scene.add_rectangle(); // no resizes
+    /// scene.add_rectangle(); // no resizes
+    /// scene.add_rectangle(); // no resizes
     ///
-    /// scene.add_square(); // causes a resize, because capacity run out
+    /// scene.add_rectangle(); // causes a resize, because capacity run out
     /// ```
     pub fn with_capacity(capacity: usize) -> Scene {
         Scene {
@@ -108,7 +108,7 @@ impl Scene {
     /// without removing the shape. New handle can be acquired with [Scene::get].
     ///
     /// If type annotations are not convenient, following shortcut functions may be used:
-    /// - [Scene::add_square] for [Square]
+    /// - [Scene::add_rectangle] for [Rectangle]
     /// - [Scene::add_circle] for [Circle]
     ///
     /// # Example
@@ -117,16 +117,16 @@ impl Scene {
     ///
     /// let mut scene = Scene::new();
     ///
-    /// let square: RIObject<Square> = scene.add();
+    /// let square: RIObject<Rectangle> = scene.add();
     /// let circle: RIObject<Circle> = scene.add();
     /// ```
     pub fn add<S: Shape + Default>(&mut self) -> RIObject<S> {
         self.add_existing(S::default())
     }
 
-    /// Shortcut to [Scene::add]::<[Square]>()
+    /// Shortcut to [Scene::add]::<[Rectangle]>()
     #[inline(always)]
-    pub fn add_square(&mut self) -> RIObject<Square> {
+    pub fn add_rectangle(&mut self) -> RIObject<Rectangle> {
         self.add()
     }
 
@@ -146,11 +146,11 @@ impl Scene {
     ///
     /// let square_id: ObjectID;
     /// {
-    ///     let square = scene.add_square();
+    ///     let square = scene.add_rectangle();
     ///     square_id = square.id();
     ///     drop(square); // Handle is destroyed!
     /// }
-    /// let square = scene.get::<Square>(square_id).unwrap(); // Get a new one
+    /// let square = scene.get::<Rectangle>(square_id).unwrap(); // Get a new one
     /// square.set_pos(10.0, 10.0);
     /// ```
     pub fn get<S: Shape + Clone + Default>(&self, id: ObjectID) -> Option<RIObject<S>> {
@@ -178,12 +178,12 @@ impl Scene {
     /// let mut scene = Scene::new();
     ///
     /// // Add a square to the scene and store its id
-    /// let square = scene.add_square();
+    /// let square = scene.add_rectangle();
     /// let square_id = square.id();
     ///
-    /// assert_ne!(scene.get::<Square>(square_id), None); // It exists!
+    /// assert_ne!(scene.get::<Rectangle>(square_id), None); // It exists!
     /// scene.remove(square_id); // Remove it
-    /// assert_eq!(scene.get::<Square>(square_id), None); // Now it doesn't
+    /// assert_eq!(scene.get::<Rectangle>(square_id), None); // Now it doesn't
     /// ```
     pub fn remove(&mut self, id: ObjectID) -> bool {
         let before = self.objects.len();
@@ -220,7 +220,7 @@ pub struct ObjectDesc {
 ///
 /// let mut scene = Scene::new();
 ///
-/// let square: RIObject<Square> = scene.add_square();
+/// let square: RIObject<Rectangle> = scene.add_rectangle();
 /// square.set_pos(10.0, 10.0)
 ///     .set_size(20.0, 20.0);
 /// ```
@@ -244,7 +244,7 @@ impl<T: Shape> RIObject<T> {
     /// use runim::prelude::*;
     ///
     /// let mut scene = Scene::new();
-    /// scene.add_square()
+    /// scene.add_rectangle()
     ///     .set_pos(10.0, 10.0);
     /// ```
     pub fn set_pos(&self, x: f32, y: f32) -> &RIObject<T> {

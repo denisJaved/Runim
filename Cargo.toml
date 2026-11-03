@@ -5,6 +5,8 @@ edition = "2024"
 license = "MIT or Apache-2.0"
 
 [dependencies]
+runim-derive = { path = "runim-derive" }
+
 glam = { version = "0.34.1"}
 log = "0.4.34"
 env_logger = "0.11.11"
@@ -25,3 +27,6 @@ prefixed_prelude = []
 builtin_renderer = ["wgpu", "winit", "bytemuck", "pollster", "image"]
 
 # TODO: Use parking_lot only if corresponding feature is enabled
+
+[workspace]
+members = ["runim-derive"]

@@ -1,0 +1,13 @@
+[package]
+name = "runim-derive"
+version = "0.1.0"
+edition = "2024"
+license = "MIT or Apache-2.0"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "3.0.9"
+quote = "1.0.47"
+proc-macro2 = "1"

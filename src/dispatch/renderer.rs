@@ -1,7 +1,7 @@
 use std::sync::{mpsc, Arc};
 use std::time::Duration;
-use crate::animations::Animation;
-use crate::shapes::{AnimationConfig, ObjectDesc};
+use runim::animations::Animation;
+use runim::shapes::{AnimationConfig, ObjectDesc};
 
 pub trait Renderer: Send + 'static {
     fn new(callback: mpsc::Sender<CommandCallback>) -> Self;
@@ -12,7 +12,7 @@ pub trait Renderer: Send + 'static {
 pub trait FriendlyRenderer: Renderer + Send + 'static {
     fn begin(&mut self, config: AnimationConfig) -> anyhow::Result<CommandCallback>;
     fn set_scene(&mut self, objects: Vec<ObjectDesc>) -> anyhow::Result<CommandCallback>;
-    fn play(&mut self, animations: Vec<Arc<dyn Animation>>, duration: Duration) -> anyhow::Result<CommandCallback>;
+    fn play(&mut self, animations: Vec<Arc<dyn Animation>>, duration: f64) -> anyhow::Result<CommandCallback>;
     fn shutdown(&mut self) -> anyhow::Result<CommandCallback>;
     fn send(&mut self, callback: CommandCallback);
 
@@ -51,9 +51,9 @@ pub enum Command {
     },
     Play {
         animations: Vec<Arc<dyn Animation>>,
-        duration: Duration
+        duration: f64
     },
-    Wait(Duration),
+    Wait(f64),
     Shutdown
 }
 

@@ -19,8 +19,15 @@ pub mod dispatch;
 pub mod renderer;
 pub mod shapes;
 pub mod animations;
+mod util_traits;
 #[cfg(feature = "builtin_renderer")]
 pub mod builtin_renderer;
+
+extern crate self as runim;
+
+pub use runim_derive::{Shape, Animation};
+pub use util_traits::IntoDuration;
+
 /// The Runim Prelude.
 ///
 /// The purpose of this module is to alleviate imports of pragmatic Runim types and traits
@@ -34,11 +41,12 @@ pub mod builtin_renderer;
 ///
 /// This option requires `prefixed_prelude` feature flag to be enabled.
 pub mod prelude {
-    pub use super::dispatch::RunimDispatcher;
-    pub use super::shapes::{AnimationConfig, Scene, RIObject, Shape, Circle, Square, ObjectID, Color};
+    pub use runim::dispatch::RunimDispatcher;
+    pub use runim::shapes::{AnimationConfig, Scene, RIObject, Shape, Circle, Rectangle, ObjectID, Color, ColorHSV};
+    pub use runim::animations::{RGBColorTween, HSVColorTween, AnimationCompositor, MoveAnimation};
     
     #[cfg(feature = "builtin_renderer")]
-    pub use super::builtin_renderer::LivePreviewRenderer;
+    pub use runim::builtin_renderer::LivePreviewRenderer;
 
     /// Alternative version of the [runim::prelude] with all re-exports having `RI` prefix.
     ///
@@ -51,9 +59,15 @@ pub mod prelude {
         pub use super::RIObject;
         pub use super::Shape as RIShape;
         pub use super::Circle as RICircle;
-        pub use super::Square as RISquare;
+        pub use super::Rectangle as RISquare;
         pub use super::ObjectID as RIObjID;
         pub use super::Color as RIColor;
+        pub use super::ColorHSV as RIColorHSV;
+
+        pub use super::RGBColorTween as RIRGBColorTween;
+        pub use super::HSVColorTween as RIHSVColorTween;
+        pub use super::AnimationCompositor as RIAnimationCompositor;
+        pub use super::MoveAnimation as RIMoveAnimation;
 
         #[cfg(feature = "builtin_renderer")]
         pub use super::LivePreviewRenderer as RILivePreviewRenderer;

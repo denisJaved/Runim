@@ -4,18 +4,18 @@ use std::sync::Arc;
 use std::time::Duration;
 use anyhow::bail;
 use glam::Vec3;
-use log::{info, warn};
+use log::{info};
 use wgpu::util::DeviceExt;
 use wgpu::wgt;
 use winit::window::Window;
-use crate::animations::{AffectedShapes, Animation, DynamicShape};
-use crate::builtin_renderer::camera::{CameraUniform, Projection};
-use crate::builtin_renderer::vertex;
-use crate::builtin_renderer::vertex::Vertex;
+use runim::animations::{AffectedShapes, Animation, DynamicShape};
+use runim::builtin_renderer::camera::{CameraUniform, Projection};
+use runim::builtin_renderer::vertex;
+use runim::builtin_renderer::vertex::Vertex;
 use super::texture::Texture;
-use crate::dbgn;
-use crate::renderer::DrawContextImpl;
-use crate::shapes::{Color, ObjectDesc, ObjectID};
+use runim::dbgn;
+use runim::renderer::DrawContextImpl;
+use runim::shapes::{Color, ObjectDesc, ObjectID};
 
 pub struct RunimState {
     objects: Vec<ObjectDesc>,
@@ -352,7 +352,7 @@ impl RunimGraphics {
                     state: &mut shape,
                 };
                 anim.passed += seconds;
-                let total = anim.animation.duration().as_secs_f64();
+                let total = anim.animation.duration();
                 anim.animation.apply(&mut dynamic, (anim.passed / total).min(1.0));
                 shape.draw(&mut ctx);
                 continue;

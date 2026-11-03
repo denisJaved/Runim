@@ -12,11 +12,11 @@ use winit::dpi::{PhysicalSize, Size};
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy};
 use winit::window::{Window, WindowId};
-use crate::animations::Animation;
-use crate::builtin_renderer::graphics::RunimGraphics;
-use crate::dispatch::{Command, CommandCallback, FriendlyRenderer, Renderer};
-use crate::prelude::AnimationConfig;
-use crate::shapes::ObjectDesc;
+use runim::animations::Animation;
+use runim::builtin_renderer::graphics::RunimGraphics;
+use runim::dispatch::{Command, CommandCallback, FriendlyRenderer, Renderer};
+use runim::prelude::AnimationConfig;
+use runim::shapes::ObjectDesc;
 
 /// [Renderer] that display output live in a window.
 pub struct LivePreviewRenderer {
@@ -118,10 +118,10 @@ impl FriendlyRenderer for LiveRendererApp {
         Ok(CommandCallback::Ok)
     }
 
-    fn play(&mut self, animations: Vec<Arc<dyn Animation>>, duration: Duration) -> anyhow::Result<CommandCallback> {
+    fn play(&mut self, animations: Vec<Arc<dyn Animation>>, duration: f64) -> anyhow::Result<CommandCallback> {
         //sleep(duration);
         self.graphics.as_mut().unwrap().set_animations(animations);
-        Ok(CommandCallback::Wait(duration))
+        Ok(CommandCallback::Wait(Duration::from_secs_f64(duration)))
     }
 
     fn shutdown(&mut self) -> anyhow::Result<CommandCallback> {

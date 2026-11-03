@@ -1,7 +1,7 @@
 mod renderer;
 
-use crate::shapes::{AnimationConfig, ObjectID, Scene};
-use std::collections::HashMap;
+use runim::shapes::{AnimationConfig, ObjectID, Scene};
+use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
 use std::sync::{Arc, mpsc};
@@ -12,7 +12,9 @@ use log::info;
 use thiserror::Error;
 
 pub use renderer::{Command, CommandCallback, Renderer, FriendlyRenderer};
-use crate::animations::Animation;
+use runim::animations::Animation;
+use runim::IntoDuration;
+use crate::animations::AffectedShapes;
 
 /// Dispatcher facilitates interactions between [Renderer] and Runim clients.
 /// 
@@ -99,7 +101,7 @@ impl<R: Renderer> RunimDispatcher<R> {
     ///
     /// let mut scene: ObjectID = dispatcher.new_scene();
     /// dispatcher.scene(&scene)
-    ///     .add_square()
+    ///     .add_rectangle()
     ///     .set_pos(14.0, 14.0);
     /// ```
     pub fn scene(&mut self, id: &ObjectID) -> &mut Scene {
@@ -119,16 +121,46 @@ impl<R: Renderer> RunimDispatcher<R> {
         Ok(())
     }
     
-    pub fn wait(&mut self, duration: Duration) -> anyhow::Result<()> {
+    pub fn wait<D: IntoDuration>(&mut self, duration: D) -> anyhow::Result<()> {
+        let duration = duration.as_secs_f64();
         let active = self.active_scene.ok_or(DispatchError::NoActiveScene)?;
         self.send(Command::Wait(duration));
-        self.scenes.get_mut(&active).unwrap().clock += duration.as_secs_f64();
+        self.scenes.get_mut(&active).unwrap().clock += duration;
         Ok(())
     }
     
     pub fn play<A: IntoAnimations>(&mut self, anims: A) -> anyhow::Result<()> {
         let anims = anims.into_animations();
-        let duration = anims.iter().map(|a| a.duration()).fold(Duration::ZERO, Duration::max);
+
+        #[cfg(debug_assertions)]
+        {
+            // Check that no animations affect same shape.
+            // Animation conflicts are UB.
+            assert!(anims.len() > 0);
+            let mut shapes = HashSet::<ObjectID>::new();
+            for x in anims.iter() {
+                match x.affected_shapes() {
+                    AffectedShapes::Single(id) => {
+                        assert!(
+                            !shapes.contains(id),
+                            "multiple animations refer to OBJ#{id}. This is UB; use animation compositor instead"
+                        );
+                        shapes.insert(*id);
+                    }
+                    AffectedShapes::Vector(vec) => {
+                        for id in vec {
+                            assert!(
+                                !shapes.contains(id),
+                                "multiple animations refer to OBJ#{id}. This is UB; use animation compositor instead"
+                            );
+                            shapes.insert(*id);
+                        }
+                    }
+                }
+            }
+        }
+
+        let duration = anims.iter().map(|a| a.duration()).fold(0.0, f64::max);
         
         let active = self.active_scene.ok_or(DispatchError::NoActiveScene)?;
         self.send(Command::Play {
@@ -139,7 +171,7 @@ impl<R: Renderer> RunimDispatcher<R> {
         for anim in &anims {
             anim.affected_shapes().apply_all(scene, anim, 1.0);
         }
-        scene.clock += duration.as_secs_f64();
+        scene.clock += duration;
         Ok(())
     }
     

@@ -24,7 +24,7 @@ impl DebugName {
 #[macro_export]
 macro_rules! dbgn {
     ( $($arg:tt)* ) => {
-        crate::builtin_renderer::debug::DebugName(String::from(format!($($arg,)*)))
+        runim::builtin_renderer::debug::DebugName(String::from(format!($($arg,)*)))
     };
 }
 
@@ -32,6 +32,6 @@ macro_rules! dbgn {
 #[macro_export]
 macro_rules! dbgn {
     ( $($arg:tt)* ) => {
-        crate::builtin_renderer::debug::DebugName()
+        runim::builtin_renderer::debug::DebugName()
     };
 }

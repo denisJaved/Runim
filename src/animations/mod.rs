@@ -1,9 +1,21 @@
 use std::fmt::Debug;
+use std::mem;
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
-use std::time::Duration;
 use log::warn;
 use parking_lot::RwLock;
-use crate::prelude::{ObjectID, Scene, Shape};
+use runim::prelude::{ObjectID, Scene, Shape};
+use runim::IntoDuration;
+use crate::animations::noop::NoOpAnimation;
+
+mod color;
+mod compositors;
+mod transform;
+mod noop;
+
+pub use color::{RGBColorTween, HSVColorTween};
+pub use compositors::{SequentialCompositor, ParallelCompositor};
+pub use transform::{MoveAnimation};
 
 #[repr(transparent)]
 pub struct DynamicShape<'a> {
@@ -20,6 +32,174 @@ impl DynamicShape<'_> {
     }
 }
 
+impl Deref for DynamicShape<'_> {
+    type Target = dyn Shape;
+
+    fn deref(&self) -> &Self::Target {
+        self.state.as_ref()
+    }
+}
+
+impl DerefMut for DynamicShape<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.state.as_mut()
+    }
+}
+
+pub trait AnimationBase: Debug + Send + Sync + 'static {
+    /// Returns full duration of the animation.
+    fn duration(&self) -> f64;
+
+    /// Returns one or multiple [ObjectID]s of shapes affected
+    /// by this animation.
+    ///
+    /// [Animation::apply] will be called for each one.
+    fn affected_shapes(&self) -> &AffectedShapes;
+}
+
+pub trait Animation: AnimationBase + Debug + Send + Sync + 'static {
+    /// Applies animation to provided state. Provided state is always a fresh
+    /// clone, so animations do not accumulate.
+    ///
+    /// `d` (∈ [0, 1]) is progress of this animation. Starting from `0` and finishing with `1`.
+    fn apply(&self, state: &mut DynamicShape, d: f64);
+}
+
+/// Provides shortcut functions for animation composing.
+///
+/// This trait is automatically implemented for all `#[derive(Animation)]`.
+///
+/// If you wish to implement it yourself add `#[animation(custom_compositor)]` after derive call.
+///
+/// See docs of trait's functions for more info and examples.
+pub trait AnimationCompositor: Animation {
+    /// Plays another animation **after** this one.
+    ///
+    /// # Example
+    /// ```
+    /// use runim::prelude::*;
+    /// use runim::renderer::debug::DebugRenderer;
+    ///
+    /// let mut dispatcher = RunimDispatcher::<DebugRenderer>::new().unwrap();
+    /// let scene = dispatcher.new_scene();
+    /// let square = dispatcher.scene(&scene).add_rectangle().set_color(Color::RED).id();
+    ///
+    /// dispatcher.play(
+    ///     RGBColorTween::new(square, 1.5, Color::RED, Color::BLUE)
+    ///     .then(RGBColorTween::new(square, 1.5, Color::BLUE, Color::GREEN))
+    ///     .then(RGBColorTween::new(square, 1.5, Color::GREEN, Color::RED))
+    /// );
+    /// // Square will turn blue, green, and lastly red.
+    /// ```
+    ///
+    /// Example above will result in following timeline:
+    /// ```plain
+    /// Time      ↓ 0.0             ↓ 1.5             ↓ 3.0           ↓ 4.5
+    /// Animation [  RED -> BLUE  ] [ BLUE -> GREEN ] [ GREEN -> RED  ]
+    /// ```
+    /// Meaning animations will play one after another without overlapping.
+    fn then<A: Animation>(self, other: A) -> SequentialCompositor where Self: Sized {
+        let mut v: Vec<Arc<dyn Animation>> = Vec::with_capacity(2);
+        v.push(Arc::new(self));
+        v.push(Arc::new(other));
+        SequentialCompositor::new(v)
+    }
+
+    /// Plays another animation **during** this one.
+    ///
+    /// # Example
+    /// ```
+    /// use glam::Vec2;
+    /// use runim::prelude::*;
+    /// use runim::renderer::debug::DebugRenderer;
+    ///
+    /// let mut dispatcher = RunimDispatcher::<DebugRenderer>::new().unwrap();
+    /// let scene = dispatcher.new_scene();
+    /// let square = dispatcher.scene(&scene).add_rectangle().set_color(Color::RED).id();
+    ///
+    /// dispatcher.play(
+    ///     RGBColorTween::new(square, 1.5, Color::RED, Color::BLUE)
+    ///     .with(MoveAnimation::new(square, 2.0, Vec2::new(0.0, 0.0), Vec2::new(1.5, 0.0)))
+    /// );
+    /// // Square will turn red and move to right at the same time
+    /// ```
+    ///
+    /// Example above will result in following timeline:
+    /// ```plain
+    /// Time      ↓ 0.0           ↓ 1.5    ↓ 2.0
+    /// Animation [  RED -> BLUE  ].........
+    ///           [          MOVE          ]
+    /// ```
+    /// Meaning animations will play simultaneously.
+    ///
+    /// Red to blue animation will stop earlier, because its duration is shorter.
+    fn with<A: Animation>(self, other: A) -> ParallelCompositor where Self: Sized {
+        let mut v: Vec<Arc<dyn Animation>> = Vec::with_capacity(2);
+        v.push(Arc::new(self));
+        v.push(Arc::new(other));
+        ParallelCompositor::new(v)
+    }
+
+    /// Wait **before** this animation.
+    ///
+    /// # Example
+    /// ```
+    /// use glam::Vec2;
+    /// use runim::prelude::*;
+    /// use runim::renderer::debug::DebugRenderer;
+    ///
+    /// let mut dispatcher = RunimDispatcher::<DebugRenderer>::new().unwrap();
+    /// let scene = dispatcher.new_scene();
+    /// let square = dispatcher.scene(&scene).add_rectangle().set_color(Color::RED).id();
+    ///
+    /// dispatcher.play(
+    ///     MoveAnimation::new(square, 2.0, Vec2::new(0.0, 0.0), Vec2::new(1.5, 0.0))
+    ///     .prepend(1.0)
+    /// );
+    /// // Square 1 second will pass, then square will move.
+    /// ```
+    ///
+    /// Example above will result in following timeline:
+    /// ```plain
+    /// Time      ↓ 0.0       ↓ 1.0                ↓ 3.0
+    /// Animation ............[        MOVE        ]
+    /// ```
+    /// Meaning animation will play after specified time gap.
+    fn prepend<D: IntoDuration>(self, duration: D) -> SequentialCompositor where Self: Sized {
+        NoOpAnimation::new_shapeless(duration).then(self)
+    }
+
+    /// Wait **after** this animation.
+    ///
+    /// # Example
+    /// ```
+    /// use glam::Vec2;
+    /// use runim::prelude::*;
+    /// use runim::renderer::debug::DebugRenderer;
+    ///
+    /// let mut dispatcher = RunimDispatcher::<DebugRenderer>::new().unwrap();
+    /// let scene = dispatcher.new_scene();
+    /// let square = dispatcher.scene(&scene).add_rectangle().set_color(Color::RED).id();
+    ///
+    /// dispatcher.play(
+    ///     MoveAnimation::new(square, 2.0, Vec2::new(0.0, 0.0), Vec2::new(1.5, 0.0))
+    ///     .append(1.0)
+    /// );
+    /// // Square 1 second will pass, then square will move.
+    /// ```
+    ///
+    /// Example above will result in following timeline:
+    /// ```plain
+    /// Time      ↓ 0.0                ↓ 2.0       ↓ 3.0
+    /// Animation [        MOVE        ]............
+    /// ```
+    /// Meaning animation will wait after playing for specified duration.
+    fn append<D: IntoDuration>(self, duration: D) -> SequentialCompositor where Self: Sized {
+        self.then(NoOpAnimation::new_shapeless(duration))
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum AffectedShapes {
     Single(ObjectID),
     Vector(Vec<ObjectID>)
@@ -54,20 +234,64 @@ impl AffectedShapes {
             }
         }
     }
+
+    pub fn contains(&self, id: ObjectID) -> bool {
+        match self {
+            AffectedShapes::Single(s) => *s == id,
+            AffectedShapes::Vector(s) => s.contains(&id)
+        }
+    }
+
+    pub(crate) fn append(&mut self, other: AffectedShapes) {
+        if let AffectedShapes::Single(s) = &self {
+            let _ = mem::replace(self, AffectedShapes::Vector(vec![*s]));
+            return;
+        }
+        if let AffectedShapes::Vector(vec) = self {
+            match other {
+                AffectedShapes::Single(value) => {
+                    vec.push(value);
+                }
+                AffectedShapes::Vector(mut values) => {
+                    vec.append(&mut values);
+                }
+            }
+            return;
+        }
+        unreachable!() // Normal match can't be used here due to borrow checker's restrictions
+    }
+
+    pub(crate) fn dedup(&mut self) {
+        if let AffectedShapes::Vector(vec) = self {
+            vec.dedup();
+        }
+    }
 }
 
-pub trait Animation: Debug + Send + Sync + 'static {
-    fn duration(&self) -> Duration;
+pub trait IntoAffectedShapes {
+    fn into_affected_shape(self) -> AffectedShapes;
+}
 
-    /// Returns one or multiple [ObjectID]s of shapes affected
-    /// by this animation.
-    ///
-    /// [Animation::apply] will be called for each one.
-    fn affected_shapes(&self) -> &AffectedShapes;
+impl IntoAffectedShapes for ObjectID {
+    fn into_affected_shape(self) -> AffectedShapes {
+        AffectedShapes::Single(self)
+    }
+}
 
-    /// Applies animation to provided state. Provided state is always a fresh
-    /// clone, so animations do not accumulate.
-    ///
-    /// `d` (∈ [0, 1]) is progress of this animation. Starting from `0` and finishing with `1`.
-    fn apply(&self, state: &mut DynamicShape, d: f64);
+impl IntoAffectedShapes for (ObjectID, ObjectID) {
+    fn into_affected_shape(self) -> AffectedShapes {
+        AffectedShapes::Vector(vec![self.0, self.1])
+    }
+}
+
+impl IntoAffectedShapes for (ObjectID, ObjectID, ObjectID) {
+    fn into_affected_shape(self) -> AffectedShapes {
+        AffectedShapes::Vector(vec![self.0, self.1, self.2])
+    }
+}
+
+impl IntoAffectedShapes for Vec<ObjectID> {
+    fn into_affected_shape(self) -> AffectedShapes {
+        AffectedShapes::Vector(self)
+    }
 }
