@@ -4,9 +4,10 @@ use glam::Vec2;
 use parking_lot::{MappedRwLockReadGuard, MappedRwLockWriteGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
+use crate::shapes::SceneID;
 
 static SCENE_ID: AtomicU32 = AtomicU32::new(0);
-type SharedShape  = Arc<RwLock<Box<dyn Shape>>>;
+type SharedShape = Arc<RwLock<Box<dyn Shape>>>;
 
 /// Stores shapes and other elements rendered in a Runim animation.
 ///
@@ -28,7 +29,7 @@ type SharedShape  = Arc<RwLock<Box<dyn Shape>>>;
 /// let scene2: ObjectID = dispatcher.add_scene(scene0);
 /// ```
 pub struct Scene {
-    pub(crate) id: ObjectID,
+    pub(crate) id: SceneID,
     pub(crate) objects: Vec<ObjectDesc>,
     pub(crate) next_id: ObjectID,
     pub(crate) clock: f64
@@ -48,9 +49,9 @@ impl Scene {
     /// ```
     pub fn new() -> Scene {
         Scene {
-            id: SCENE_ID.fetch_add(1, Ordering::Release),
+            id: SceneID(SCENE_ID.fetch_add(1, Ordering::Release)),
             objects: Vec::new(),
-            next_id: 0,
+            next_id: ObjectID(0),
             clock: 0f64,
         }
     }
@@ -73,9 +74,9 @@ impl Scene {
     /// ```
     pub fn with_capacity(capacity: usize) -> Scene {
         Scene {
-            id: SCENE_ID.fetch_add(1, Ordering::Release),
+            id: SceneID(SCENE_ID.fetch_add(1, Ordering::Release)),
             objects: Vec::with_capacity(capacity),
-            next_id: 0,
+            next_id: ObjectID(0),
             clock: 0f64,
         }
     }
@@ -84,7 +85,7 @@ impl Scene {
     /// renderer automatically.
     pub(crate) fn add_existing<S: Shape>(&mut self, shape: S) -> RIObject<S> {
         let id = self.next_id;
-        self.next_id += 1;
+        self.next_id = ObjectID(self.next_id.0 + 1);
 
         let shape: SharedShape = Arc::new(RwLock::new(Box::new(shape)));
 

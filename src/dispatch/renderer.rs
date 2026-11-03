@@ -66,9 +66,6 @@ pub enum CommandCallback {
 
 impl CommandCallback {
     fn from_result(result: anyhow::Result<CommandCallback>) -> CommandCallback {
-        match result {
-            Ok(v) => v,
-            Err(e) => CommandCallback::FatalError(e)
-        }
+        result.unwrap_or_else(|e| CommandCallback::FatalError(e))
     }
 }

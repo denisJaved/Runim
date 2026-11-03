@@ -43,7 +43,7 @@ pub use util_traits::IntoDuration;
 pub mod prelude {
     pub use runim::dispatch::RunimDispatcher;
     pub use runim::shapes::{AnimationConfig, Scene, RIObject, Shape, Circle, Rectangle, ObjectID, Color, ColorHSV};
-    pub use runim::animations::{RGBColorTween, HSVColorTween, AnimationCompositor, MoveAnimation};
+    pub use runim::animations::{RGBColorTween, HSVColorTween, AnimationCompositor, MoveAnimation, easing};
     
     #[cfg(feature = "builtin_renderer")]
     pub use runim::builtin_renderer::LivePreviewRenderer;
@@ -68,6 +68,7 @@ pub mod prelude {
         pub use super::HSVColorTween as RIHSVColorTween;
         pub use super::AnimationCompositor as RIAnimationCompositor;
         pub use super::MoveAnimation as RIMoveAnimation;
+        pub use super::easing as RIEasing;
 
         #[cfg(feature = "builtin_renderer")]
         pub use super::LivePreviewRenderer as RILivePreviewRenderer;

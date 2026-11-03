@@ -7,7 +7,6 @@ use std::marker::PhantomData;
 use std::sync::{Arc, mpsc};
 use std::thread;
 use std::thread::{sleep, JoinHandle};
-use std::time::Duration;
 use log::info;
 use thiserror::Error;
 
@@ -15,6 +14,7 @@ pub use renderer::{Command, CommandCallback, Renderer, FriendlyRenderer};
 use runim::animations::Animation;
 use runim::IntoDuration;
 use crate::animations::AffectedShapes;
+use crate::shapes::SceneID;
 
 /// Dispatcher facilitates interactions between [Renderer] and Runim clients.
 /// 
@@ -38,8 +38,8 @@ pub struct RunimDispatcher<R: Renderer> {
     tx: mpsc::Sender<Command>,
     rx: mpsc::Receiver<CommandCallback>,
 
-    scenes: HashMap<ObjectID, Scene>,
-    active_scene: Option<ObjectID>,
+    scenes: HashMap<SceneID, Scene>,
+    active_scene: Option<SceneID>,
 
     _thread: JoinHandle<()>,
     __marker: PhantomData<R>
@@ -72,14 +72,14 @@ impl<R: Renderer> RunimDispatcher<R> {
         })
     }
 
-    pub fn new_scene(&mut self) -> ObjectID {
+    pub fn new_scene(&mut self) -> SceneID {
         let scene = Scene::new();
         let id = scene.id;
         self.scenes.insert(scene.id, scene);
         id
     }
 
-    pub fn add_scene(&mut self, scene: Scene) -> ObjectID {
+    pub fn add_scene(&mut self, scene: Scene) -> SceneID {
         let id = scene.id;
         self.scenes.insert(scene.id, scene);
         id
@@ -104,15 +104,15 @@ impl<R: Renderer> RunimDispatcher<R> {
     ///     .add_rectangle()
     ///     .set_pos(14.0, 14.0);
     /// ```
-    pub fn scene(&mut self, id: &ObjectID) -> &mut Scene {
+    pub fn scene(&mut self, id: &SceneID) -> &mut Scene {
         self.scenes.get_mut(id).expect("unknown scene")
     }
     
-    pub fn scene_imm(&self, id: &ObjectID) -> &Scene {
+    pub fn scene_imm(&self, id: &SceneID) -> &Scene {
         self.scenes.get(id).expect("unknown scene")
     }
     
-    pub fn set_scene(&mut self, id: ObjectID) -> anyhow::Result<()> {
+    pub fn set_scene(&mut self, id: SceneID) -> anyhow::Result<()> {
         let scene = self.scenes.get(&id).expect("Unknown scene");
         self.send(Command::SetScene {
             objects: scene.objects.clone()
@@ -143,7 +143,7 @@ impl<R: Renderer> RunimDispatcher<R> {
                     AffectedShapes::Single(id) => {
                         assert!(
                             !shapes.contains(id),
-                            "multiple animations refer to OBJ#{id}. This is UB; use animation compositor instead"
+                            "multiple animations refer to {id}. This is UB; use animation compositor instead"
                         );
                         shapes.insert(*id);
                     }
@@ -151,7 +151,7 @@ impl<R: Renderer> RunimDispatcher<R> {
                         for id in vec {
                             assert!(
                                 !shapes.contains(id),
-                                "multiple animations refer to OBJ#{id}. This is UB; use animation compositor instead"
+                                "multiple animations refer to {id}. This is UB; use animation compositor instead"
                             );
                             shapes.insert(*id);
                         }

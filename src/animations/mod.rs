@@ -7,15 +7,19 @@ use parking_lot::RwLock;
 use runim::prelude::{ObjectID, Scene, Shape};
 use runim::IntoDuration;
 use crate::animations::noop::NoOpAnimation;
+use crate::shapes::RIObject;
 
 mod color;
 mod compositors;
 mod transform;
+pub mod easing;
+mod easing_wrapper;
 mod noop;
 
 pub use color::{RGBColorTween, HSVColorTween};
 pub use compositors::{SequentialCompositor, ParallelCompositor};
 pub use transform::{MoveAnimation};
+pub use easing_wrapper::{AnimationEasing, EasingFn};
 
 pub struct DynamicShape<'a> {
     pub(crate) state: &'a mut Box<dyn Shape>,
@@ -205,8 +209,40 @@ pub trait AnimationCompositor: Animation {
     fn append<D: IntoDuration>(self, duration: D) -> SequentialCompositor where Self: Sized {
         self.then(NoOpAnimation::new_shapeless(duration))
     }
+
+    /// Adds custom easing over this animation.
+    /// 
+    /// This function accepts boxed easing functions.
+    /// For `'static` references use [AnimationCompositor::add_easing_ref].
+    /// 
+    /// # Example
+    /// ```
+    /// use glam::Vec2;
+    /// use runim::prelude::*;
+    /// use runim::renderer::debug::DebugRenderer;
+    ///
+    /// let mut dispatcher = RunimDispatcher::<DebugRenderer>::new().unwrap();
+    /// let scene = dispatcher.new_scene();
+    /// let square = dispatcher.scene(&scene).add_rectangle().set_color(Color::RED).id();
+    ///
+    /// dispatcher.play(
+    ///     MoveAnimation::new(square, 2.0, Vec2::new(0.0, 0.0), Vec2::new(1.5, 0.0))
+    ///     .add_easing_ref(&easing::reversed)
+    /// );
+    /// ```
+    fn add_easing(self, fnc: Box<dyn EasingFn>) -> AnimationEasing where Self: Sized {
+        AnimationEasing::new(self, fnc)
+    }
+    
+    fn add_easing_ref(self, fnc: &'static dyn EasingFn) -> AnimationEasing where Self: Sized {
+        AnimationEasing::new_ref(self, fnc)
+    }
 }
 
+/// Represents shapes affected by [Animation].
+///
+/// [Generic functions](https://doc.rust-lang.org/reference/items/functions.html#r-items.fn.generics)
+/// may use [IntoAffectedShapes] to accept values of this enum more conveniently.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum AffectedShapes {
     Single(ObjectID),
@@ -277,6 +313,16 @@ impl AffectedShapes {
     }
 }
 
+/// Types that can be converted into [AffectedShapes].
+///
+/// Intended to be used in [generic functions](https://doc.rust-lang.org/reference/items/functions.html#r-items.fn.generics).
+///
+/// This trait is implemented for following types by default:
+/// - [ObjectID]
+/// - ([ObjectID], [ObjectID])
+/// - ([ObjectID], [ObjectID], [ObjectID])
+/// - [Vec]<[ObjectID]>
+/// - [RIObject]
 pub trait IntoAffectedShapes {
     fn into_affected_shape(self) -> AffectedShapes;
 }
@@ -302,5 +348,11 @@ impl IntoAffectedShapes for (ObjectID, ObjectID, ObjectID) {
 impl IntoAffectedShapes for Vec<ObjectID> {
     fn into_affected_shape(self) -> AffectedShapes {
         AffectedShapes::Vector(self)
+    }
+}
+
+impl<T: Shape> IntoAffectedShapes for RIObject<T> {
+    fn into_affected_shape(self) -> AffectedShapes {
+        AffectedShapes::Single(self.id())
     }
 }

@@ -4,7 +4,7 @@ mod primitive;
 mod color;
 
 use std::any::Any;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display, Formatter};
 use glam::Vec2;
 use runim::renderer::DrawContext;
 
@@ -14,7 +14,27 @@ pub use animation::AnimationConfig;
 pub use color::{Color, ColorHSV, ColoredShape};
 pub(crate) use scene::ObjectDesc;
 
-pub type ObjectID = u32;
+#[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
+#[repr(transparent)]
+pub struct ObjectID(u32);
+
+impl Display for ObjectID {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("OBJ#")?;
+        Display::fmt(&self.0, f)
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
+#[repr(transparent)]
+pub struct SceneID(u32);
+
+impl Display for SceneID {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SCENE#")?;
+        Display::fmt(&self.0, f)
+    }
+}
 
 /// Base trait for all [Shape]s.
 /// 

@@ -27,10 +27,11 @@ pollster = { version = "1.0.1", optional = true }
 image = { version = "0.25.10", default-features = false, features = ["png"], optional = true}
 
 [features]
-default = ["debugging", "prefixed_prelude", "builtin_renderer"]
+default = ["debugging", "prefixed_prelude", "builtin_renderer", "cubic_bezier_presets"]
 debugging = []
 prefixed_prelude = []
 builtin_renderer = ["wgpu", "winit", "bytemuck", "pollster", "image"]
+cubic_bezier_presets = []
 
 # TODO: Use parking_lot only if corresponding feature is enabled
 

@@ -2,6 +2,10 @@ use runim_derive::Animation;
 use runim::animations::{AffectedShapes, Animation, DynamicShape, IntoAffectedShapes};
 use runim::IntoDuration;
 
+/// No-op animation.
+/// 
+/// This animation simply does not do anything.
+/// It may be used as placeholder to wait between animations
 #[derive(Animation, Debug, Clone)]
 pub struct NoOpAnimation {
     shapes: AffectedShapes,
