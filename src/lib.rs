@@ -14,18 +14,27 @@
 //! [dependencies]
 //! runim = "0.1.0"
 //! ```
+//!
+//! ## Feature flags
+//! - `debugging` - enables debug names for `wgpu` objects in built-in renderers
+//! - `prefixed_prelude` - enables prefixed prelude version. See [prelude::prefixed]
+//! - `builtin_renderer` - includes Runim's built-in animation renderer. Requires [wgpu](https://crates.io/crates/wgpu), [winit](https://crates.io/crates/winit), [bytemuck](https://crates.io/crates/bytemuck), [pollster](https://crates.io/crates/pollster), and [image/png](https://crates.io/crates/image).
+//! - `cubic_bezier_presets` - includes ready-to-use presets for [animations::easing::cubic_bezier].
+//! 
+//! All flags above are enabled by default.
 
 pub mod dispatch;
 pub mod renderer;
 pub mod shapes;
 pub mod animations;
+pub mod interpolations;
 mod util_traits;
 #[cfg(feature = "builtin_renderer")]
 pub mod builtin_renderer;
 
 extern crate self as runim;
 
-pub use runim_derive::{Shape, Animation};
+pub use runim_derive::{Shape, Animation, interpolate};
 pub use util_traits::IntoDuration;
 
 /// The Runim Prelude.
@@ -39,11 +48,12 @@ pub use util_traits::IntoDuration;
 /// If importing objects with commonly used names like `Scene` causes name collisions,
 /// [runim::prelude::prefixed] might be used.
 ///
-/// This option requires `prefixed_prelude` feature flag to be enabled.
+/// Prefixed option requires `prefixed_prelude` feature flag to be enabled.
 pub mod prelude {
     pub use runim::dispatch::RunimDispatcher;
     pub use runim::shapes::{AnimationConfig, Scene, RIObject, Shape, Circle, Rectangle, ObjectID, Color, ColorHSV};
-    pub use runim::animations::{RGBColorTween, HSVColorTween, AnimationCompositor, MoveAnimation, easing};
+    pub use runim::animations::{RGBColorTween, HSVColorTween, AnimationCompositor, MoveAnimation, easing, AnimationHelper};
+    pub use runim::interpolations::{Interpolation, property};
     
     #[cfg(feature = "builtin_renderer")]
     pub use runim::builtin_renderer::LivePreviewRenderer;
@@ -69,6 +79,10 @@ pub mod prelude {
         pub use super::AnimationCompositor as RIAnimationCompositor;
         pub use super::MoveAnimation as RIMoveAnimation;
         pub use super::easing as RIEasing;
+        pub use super::AnimationHelper as RIAnimationHelper;
+
+        pub use super::Interpolation as RIInterpolation;
+        pub use super::property as RIProperty;
 
         #[cfg(feature = "builtin_renderer")]
         pub use super::LivePreviewRenderer as RILivePreviewRenderer;

@@ -29,6 +29,12 @@ pub struct Rectangle {
     transform: Transform2D,
     color: Color
 }
+impl Rectangle {
+    pub fn width(&self) -> &f32 { &self.width }
+    pub fn width_mut(&mut self) -> &mut f32 { &mut self.width }
+    pub fn height(&self) -> &f32 { &self.height }
+    pub fn height_mut(&mut self) -> &mut f32 { &mut self.height }
+}
 impl Shape for Rectangle {
     fn draw(&self, ctx: &mut DrawContext) {
         ctx.offset2(self.transform.pos);

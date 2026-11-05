@@ -1,7 +1,96 @@
-use proc_macro::TokenStream;
+use proc_macro::{TokenStream, TokenTree};
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput};
+use syn::{parse_macro_input, DeriveInput, Expr, Path, Token};
+use syn::__private::TokenStream2;
+use syn::parse::{Parse, ParseStream};
+// TODO: Refactor this mess
 
+// ==================== interpolate! ====================
+// TODO: Test interpolate!. Partically vibecoded
+struct IplInput {
+    shape: Expr,
+    duration: Expr,
+    items: Vec<IplItem>
+}
+impl Parse for IplInput {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let shape: Expr = input.parse()?;
+        input.parse::<Token![,]>()?;
+        let duration: Expr = input.parse()?;
+
+        let mut items = Vec::new();
+        while !input.is_empty() {
+            input.parse::<Token![,]>()?;
+            if input.is_empty() { break; }
+            items.push(input.parse::<IplItem>()?)
+        }
+
+        Ok(IplInput { shape, duration, items })
+    }
+}
+struct IplItem {
+    property: Path,
+    from: Expr,
+    to: Expr,
+    easing: EasingKind
+}
+impl Parse for IplItem {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let property: Path = input.parse()?;
+        input.parse::<Token![:]>()?;
+        let from: Expr = input.parse()?;
+        input.parse::<Token![=>]>()?;
+        let to: Expr = input.parse()?;
+        input.parse::<Token![;]>()?;
+        let easing = parse_easing(input)?;
+        Ok(IplItem { property, from, to, easing })
+    }
+}
+fn parse_easing(input: ParseStream) -> syn::Result<EasingKind> {
+    let expr: Expr = input.parse()?;
+    match &expr {
+        Expr::Path(p) if p.path.is_ident("LINEAR") => Ok(EasingKind::Linear),
+        Expr::Reference(_) => Ok(EasingKind::Ref(expr)),
+        _ => Ok(EasingKind::Owned(expr)),
+    }
+}
+enum EasingKind {
+    Linear,
+    Ref(Expr),
+    Owned(Expr)
+}
+
+fn expand(input: IplInput) -> TokenStream2 {
+    let IplInput { shape, duration, items } = input;
+
+    let calls = items.into_iter().map(|IplItem { property, from, to, easing }| {
+        match easing {
+            EasingKind::Linear => quote! {
+                .linear(#property, #from, #to)
+            },
+            EasingKind::Ref(e) => quote! {
+                .with_easing(#property, #from, #to, #e)
+            },
+            EasingKind::Owned(e) => quote! {
+                .with_owned_easing(#property, #from, #to, #e)
+            },
+        }
+    });
+
+    quote! {
+        runim::prelude::Interpolation::builder(#shape, #duration)
+            #(#calls)*
+            .build()
+    }
+}
+
+#[proc_macro]
+pub fn interpolate(input: TokenStream) -> TokenStream {
+    expand(parse_macro_input!(input as IplInput)).into()
+}
+
+
+// ==================== derive macros ====================
 #[proc_macro_derive(Shape, attributes(shape))]
 pub fn derive_shape_base(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);

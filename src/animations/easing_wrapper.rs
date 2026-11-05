@@ -4,7 +4,7 @@ use crate::animations::{AffectedShapes, Animation, AnimationBase, DynamicShape};
 /// Wraps another animation to provide custom interpolation.
 pub struct AnimationEasing {
     parent: Box<dyn Animation>,
-    fnc: DynFn
+    fnc: DynEasingFn
 }
 
 impl AnimationEasing {
@@ -14,7 +14,7 @@ impl AnimationEasing {
     ) -> AnimationEasing {
         AnimationEasing {
             parent: Box::new(parent),
-            fnc: DynFn::Boxed(fnc),
+            fnc: DynEasingFn::Boxed(fnc),
         }
     }
     
@@ -24,7 +24,7 @@ impl AnimationEasing {
     ) -> AnimationEasing {
         AnimationEasing {
             parent: Box::new(parent),
-            fnc: DynFn::Ref(fnc),
+            fnc: DynEasingFn::Ref(fnc),
         }
     }
 }
@@ -49,17 +49,25 @@ impl AnimationBase for AnimationEasing {
 
 impl Animation for AnimationEasing {
     fn apply(&self, state: &mut DynamicShape, d: f64) {
-        let d = match &self.fnc {
-            DynFn::Ref(r) => r.apply(d),
-            DynFn::Boxed(b) => b.apply(d)
-        };
+        let d = self.fnc.apply(d);
         self.parent.apply(state, d);
     }
 }
 
-enum DynFn {
+pub(crate) enum DynEasingFn {
+    Linear,
     Ref(&'static dyn EasingFn),
     Boxed(Box<dyn EasingFn>)
+}
+
+impl DynEasingFn {
+    pub(crate) fn apply(&self, d: f64) -> f64 {
+        match self {
+            DynEasingFn::Linear => d,
+            DynEasingFn::Ref(r) => r.apply(d),
+            DynEasingFn::Boxed(b) => b.apply(d)
+        }
+    }
 }
 
 pub trait EasingFn: Send + Sync {

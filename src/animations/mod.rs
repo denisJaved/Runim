@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use std::mem;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
+use glam::Vec2;
 use log::warn;
 use parking_lot::RwLock;
 use runim::prelude::{ObjectID, Scene, Shape};
@@ -20,6 +21,10 @@ pub use color::{RGBColorTween, HSVColorTween};
 pub use compositors::{SequentialCompositor, ParallelCompositor};
 pub use transform::{MoveAnimation};
 pub use easing_wrapper::{AnimationEasing, EasingFn};
+pub(crate) use easing_wrapper::DynEasingFn;
+use crate::dispatch::IntoAnimations;
+use crate::interpolations::InterpolationBuilder;
+use crate::prelude::Interpolation;
 
 pub struct DynamicShape<'a> {
     pub(crate) state: &'a mut Box<dyn Shape>,
@@ -351,8 +356,31 @@ impl IntoAffectedShapes for Vec<ObjectID> {
     }
 }
 
-impl<T: Shape> IntoAffectedShapes for RIObject<T> {
+impl<T: Shape> IntoAffectedShapes for &RIObject<T> {
     fn into_affected_shape(self) -> AffectedShapes {
         AffectedShapes::Single(self.id())
+    }
+}
+
+/// Provides shortcut functions to create common animations
+pub trait AnimationHelper: IntoAffectedShapes + Sized {
+    #[inline]
+    fn interpolate<D: IntoDuration>(self, duration: D) -> InterpolationBuilder {
+        Interpolation::builder(self, duration)
+    }
+
+    #[inline]
+    fn move_from_to<D: IntoDuration, P: Into<Vec2>>(self, duration: D, from: P, to: P) -> MoveAnimation {
+        MoveAnimation::new(self, duration, from.into(), to.into())
+    }
+}
+
+impl<T: IntoAffectedShapes + Sized> AnimationHelper for T {}
+
+impl<T: Shape> RIObject<T> {
+    #[inline]
+    pub fn move_to<D: IntoDuration, P: Into<Vec2>>(&self, duration: D, to: P) -> MoveAnimation {
+        let from = self.shape().transform().pos;
+        MoveAnimation::new(self, duration, from, to.into())
     }
 }

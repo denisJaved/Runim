@@ -22,6 +22,10 @@ mod presets {
 #[cfg(feature = "cubic_bezier_presets")]
 pub use presets::*;
 
+/// Creates new owned easing function that uses a cubic [Bézier curve](https://developer.mozilla.org/en-US/docs/Glossary/Bezier_curve).
+///
+/// This functions works like [CSS cuber-bezier() function](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/easing-function/cubic-bezier).
+/// Check out its docs for more information.
 pub fn cubic_bezier(x1: f64, y1: f64, x2: f64, y2: f64) -> Box<dyn EasingFn> {
     Box::new(CubicBezier::new(x1, y1, x2, y2))
 }
