@@ -14,6 +14,12 @@ pub trait DrawContextImpl: Any {
     
     fn vertex(&mut self, pos: Vec3, color: Color);
 
+    fn triangle(&mut self, p1: Vec3, p2: Vec3, p3: Vec3, color: Color) {
+        self.vertex(p1, color);
+        self.vertex(p2, color);
+        self.vertex(p3, color);
+    }
+
     fn as_any(&self) -> &dyn Any;
     
     fn as_any_mut(&mut self) -> &mut dyn Any;

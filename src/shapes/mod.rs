@@ -9,7 +9,7 @@ use glam::Vec2;
 use runim::renderer::DrawContext;
 
 pub use scene::{Scene, RIObject};
-pub use primitive::{Rectangle, Circle};
+pub use primitive::*;
 pub use animation::AnimationConfig;
 pub use color::{Color, ColorHSV, ColoredShape};
 pub(crate) use scene::ObjectDesc;

@@ -1,8 +1,8 @@
-use proc_macro::{TokenStream, TokenTree};
+use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput, Expr, Path, Token};
 use syn::__private::TokenStream2;
 use syn::parse::{Parse, ParseStream};
+use syn::{DeriveInput, Expr, Path, Token, parse_macro_input};
 // TODO: Refactor this mess
 
 // ==================== interpolate! ====================
@@ -60,7 +60,7 @@ enum EasingKind {
     Owned(Expr)
 }
 
-fn expand(input: IplInput) -> TokenStream2 {
+fn expand(input: IplInput) -> TokenStream2 { // Maybe I shouldn't use __private::TokenStream2
     let IplInput { shape, duration, items } = input;
 
     let calls = items.into_iter().map(|IplItem { property, from, to, easing }| {
@@ -78,7 +78,7 @@ fn expand(input: IplInput) -> TokenStream2 {
     });
 
     quote! {
-        runim::prelude::Interpolation::builder(#shape, #duration)
+        ::runim::prelude::Interpolation::builder(#shape, #duration)
             #(#calls)*
             .build()
     }
@@ -117,36 +117,36 @@ pub fn derive_shape_base(input: TokenStream) -> TokenStream {
 
     if has_color {
         as_colored = quote! {
-            fn as_colored(&self) -> Option<&dyn runim::shapes::ColoredShape> {
+            fn as_colored(&self) -> Option<&dyn ::runim::shapes::ColoredShape> {
                 Some(self)
             }
 
-            fn as_colored_mut(&mut self) -> Option<&mut dyn runim::shapes::ColoredShape> {
+            fn as_colored_mut(&mut self) -> Option<&mut dyn ::runim::shapes::ColoredShape> {
                 Some(self)
             }
         };
         colored = quote! {
-            impl runim::shapes::ColoredShape for #name {
-                fn color(&self) -> &runim::shapes::Color {
+            impl ::runim::shapes::ColoredShape for #name {
+                fn color(&self) -> &::runim::shapes::Color {
                     &self.color
                 }
 
-                fn color_mut(&mut self) -> &mut runim::shapes::Color {
+                fn color_mut(&mut self) -> &mut ::runim::shapes::Color {
                     &mut self.color
                 }
 
-                fn set_color(&mut self, color: runim::shapes::Color) {
+                fn set_color(&mut self, color: ::runim::shapes::Color) {
                     self.color = color;
                 }
             }
         }
     } else {
         as_colored = quote! {
-            fn as_colored(&self) -> Option<&dyn runim::shapes::ColoredShape> {
+            fn as_colored(&self) -> Option<&dyn ::runim::shapes::ColoredShape> {
                 None
             }
 
-            fn as_colored_mut(&mut self) -> Option<&mut dyn runim::shapes::ColoredShape> {
+            fn as_colored_mut(&mut self) -> Option<&mut dyn ::runim::shapes::ColoredShape> {
                 None
             }
         };
@@ -154,15 +154,15 @@ pub fn derive_shape_base(input: TokenStream) -> TokenStream {
     };
 
     let expanded = quote! {
-        impl runim::shapes::ShapeBase for #name {
-            fn as_any(&self) -> &dyn std::any::Any {
+        impl ::runim::shapes::ShapeBase for #name {
+            fn as_any(&self) -> &dyn ::std::any::Any {
                 self
             }
-            fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+            fn as_any_mut(&mut self) -> &mut dyn ::std::any::Any {
                 self
             }
-            fn clone_raw(&self) -> Box<dyn runim::shapes::Shape> {
-                Box::new(core::clone::Clone::clone(self))
+            fn clone_raw(&self) -> Box<dyn ::runim::shapes::Shape> {
+                Box::new(::core::clone::Clone::clone(self))
             }
             #as_colored
         }
@@ -199,17 +199,17 @@ pub fn derive_animation_base(input: TokenStream) -> TokenStream {
         quote! {}
     } else {
         quote! {
-            impl runim::animations::AnimationCompositor for #name {}
+            impl ::runim::animations::AnimationCompositor for #name {}
         }
     };
 
     let expanded = quote! {
-        impl runim::animations::AnimationBase for #name {
+        impl ::runim::animations::AnimationBase for #name {
             fn duration(&self) -> f64 {
                 self.duration
             }
 
-            fn affected_shapes(&self) -> &runim::animations::AffectedShapes {
+            fn affected_shapes(&self) -> &::runim::animations::AffectedShapes {
                 &self.shapes
             }
         }

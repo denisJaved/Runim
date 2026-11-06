@@ -31,7 +31,7 @@ impl NoOpAnimation {
 }
 
 impl Animation for NoOpAnimation {
-    fn apply(&self, state: &mut DynamicShape, d: f64) {
+    fn apply(&self, _state: &mut DynamicShape, _d: f64) {
         // NO OP
     }
 }

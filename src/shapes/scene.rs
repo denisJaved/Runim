@@ -23,10 +23,10 @@ type SharedShape = Arc<RwLock<Box<dyn Shape>>>;
 ///
 /// // Attached to a dispatcher
 /// let mut dispatcher = RunimDispatcher::<DebugRenderer>::new().unwrap();
-/// let scene1: ObjectID = dispatcher.new_scene();
+/// let scene1: SceneID = dispatcher.new_scene();
 ///
 /// // Move scene to a dispatcher
-/// let scene2: ObjectID = dispatcher.add_scene(scene0);
+/// let scene2: SceneID = dispatcher.add_scene(scene0);
 /// ```
 pub struct Scene {
     pub(crate) id: SceneID,

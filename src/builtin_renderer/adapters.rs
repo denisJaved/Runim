@@ -92,7 +92,7 @@ struct LiveRendererApp {
 }
 
 impl Renderer for LiveRendererApp {
-    fn new(callback: Sender<CommandCallback>) -> Self {
+    fn new(_callback: Sender<CommandCallback>) -> Self {
         unreachable!() // LiveRendererApp created internally in LivePreviewRenderer
     }
 

@@ -99,7 +99,7 @@ impl<R: Renderer> RunimDispatcher<R> {
     ///
     /// let mut dispatcher = RunimDispatcher::<DebugRenderer>::new().unwrap();
     ///
-    /// let mut scene: ObjectID = dispatcher.new_scene();
+    /// let mut scene: SceneID = dispatcher.new_scene();
     /// dispatcher.scene(&scene)
     ///     .add_rectangle()
     ///     .set_pos(14.0, 14.0);

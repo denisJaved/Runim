@@ -51,7 +51,7 @@ pub use util_traits::IntoDuration;
 /// Prefixed option requires `prefixed_prelude` feature flag to be enabled.
 pub mod prelude {
     pub use runim::dispatch::RunimDispatcher;
-    pub use runim::shapes::{AnimationConfig, Scene, RIObject, Shape, Circle, Rectangle, ObjectID, Color, ColorHSV};
+    pub use runim::shapes::{AnimationConfig, Scene, RIObject, Shape, Circle, Rectangle, ObjectID, SceneID, Color, ColorHSV};
     pub use runim::animations::{RGBColorTween, HSVColorTween, AnimationCompositor, MoveAnimation, easing, AnimationHelper};
     pub use runim::interpolations::{Interpolation, property};
     
@@ -71,6 +71,7 @@ pub mod prelude {
         pub use super::Circle as RICircle;
         pub use super::Rectangle as RISquare;
         pub use super::ObjectID as RIObjID;
+        pub use super::SceneID as RISceneID;
         pub use super::Color as RIColor;
         pub use super::ColorHSV as RIColorHSV;
 

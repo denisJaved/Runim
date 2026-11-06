@@ -18,7 +18,7 @@ use crate::IntoDuration;
 /// or to execute them in order.
 ///
 /// # Example
-/// ```
+/// ```ignore
 /// use runim::prelude::*;
 /// use runim::animations::SequentialCompositor;
 /// use runim::renderer::debug::DebugRenderer;
@@ -28,10 +28,10 @@ use crate::IntoDuration;
 /// let square = dispatcher.scene(&scene).add_rectangle().set_color(Color::RED).id();
 ///
 /// // Example 1
-/// dispatcher.play(
+/// dispatcher.play((
 ///     RGBColorTween::new(square, 1.0, Color::RED, Color::BLUE),
 ///     RGBColorTween::new(square, 1.0, Color::BLUE, Color::GREEN)
-/// );
+/// ));
 ///
 /// // Example 2
 /// dispatcher.play(SequentialCompositor::new((
@@ -192,7 +192,7 @@ impl AnimationCompositor for SequentialCompositor {
 /// or to execute them at the same time.
 ///
 /// # Example
-/// ```
+/// ```ignore
 /// use glam::Vec2;
 /// use runim::prelude::*;
 /// use runim::animations::ParallelCompositor;
@@ -203,10 +203,10 @@ impl AnimationCompositor for SequentialCompositor {
 /// let square = dispatcher.scene(&scene).add_rectangle().set_color(Color::RED).id();
 ///
 /// // Example 1
-/// dispatcher.play(
+/// dispatcher.play((
 ///     RGBColorTween::new(square, 1.0, Color::RED, Color::BLUE),
 ///     MoveAnimation::new(square, 1.0, Vec2::ZERO, Vec2::new(1.0, 0.0))
-/// );
+/// ));
 ///
 /// // Example 2
 /// dispatcher.play(ParallelCompositor::new((

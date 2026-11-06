@@ -22,7 +22,6 @@ pub use compositors::{SequentialCompositor, ParallelCompositor};
 pub use transform::{MoveAnimation};
 pub use easing_wrapper::{AnimationEasing, EasingFn};
 pub(crate) use easing_wrapper::DynEasingFn;
-use crate::dispatch::IntoAnimations;
 use crate::interpolations::InterpolationBuilder;
 use crate::prelude::Interpolation;
 
@@ -113,6 +112,7 @@ pub trait AnimationCompositor: Animation {
     /// Meaning animations will play one after another without overlapping.
     /// 
     /// See [SequentialCompositor] for more information.
+    #[must_use = "Animation must be passed to a dispatcher to be played"]
     fn then<A: Animation>(self, other: A) -> SequentialCompositor where Self: Sized {
         let mut v: Vec<Arc<dyn Animation>> = Vec::with_capacity(2);
         v.push(Arc::new(self));
@@ -150,6 +150,7 @@ pub trait AnimationCompositor: Animation {
     /// Red to blue animation will stop earlier, because its duration is shorter.
     /// 
     /// See [ParallelCompositor] for more information.
+    #[must_use = "Animation must be passed to a dispatcher to be played"]
     fn with<A: Animation>(self, other: A) -> ParallelCompositor where Self: Sized {
         let mut v: Vec<Arc<dyn Animation>> = Vec::with_capacity(2);
         v.push(Arc::new(self));
@@ -182,6 +183,7 @@ pub trait AnimationCompositor: Animation {
     /// Animation ............[        MOVE        ]
     /// ```
     /// Meaning animation will play after specified time gap.
+    #[must_use = "Animation must be passed to a dispatcher to be played"]
     fn prepend<D: IntoDuration>(self, duration: D) -> SequentialCompositor where Self: Sized {
         NoOpAnimation::new_shapeless(duration).then(self)
     }
@@ -211,6 +213,7 @@ pub trait AnimationCompositor: Animation {
     /// Animation [        MOVE        ]............
     /// ```
     /// Meaning animation will wait after playing for specified duration.
+    #[must_use = "Animation must be passed to a dispatcher to be played"]
     fn append<D: IntoDuration>(self, duration: D) -> SequentialCompositor where Self: Sized {
         self.then(NoOpAnimation::new_shapeless(duration))
     }
@@ -235,10 +238,12 @@ pub trait AnimationCompositor: Animation {
     ///     .add_easing_ref(&easing::reversed)
     /// );
     /// ```
+    #[must_use = "Animation must be passed to a dispatcher to be played"]
     fn add_easing(self, fnc: Box<dyn EasingFn>) -> AnimationEasing where Self: Sized {
         AnimationEasing::new(self, fnc)
     }
-    
+
+    #[must_use = "Animation must be passed to a dispatcher to be played"]
     fn add_easing_ref(self, fnc: &'static dyn EasingFn) -> AnimationEasing where Self: Sized {
         AnimationEasing::new_ref(self, fnc)
     }
@@ -365,11 +370,13 @@ impl<T: Shape> IntoAffectedShapes for &RIObject<T> {
 /// Provides shortcut functions to create common animations
 pub trait AnimationHelper: IntoAffectedShapes + Sized {
     #[inline]
+    #[must_use = "Animation must be passed to a dispatcher to be played"]
     fn interpolate<D: IntoDuration>(self, duration: D) -> InterpolationBuilder {
         Interpolation::builder(self, duration)
     }
 
     #[inline]
+    #[must_use = "Animation must be passed to a dispatcher to be played"]
     fn move_from_to<D: IntoDuration, P: Into<Vec2>>(self, duration: D, from: P, to: P) -> MoveAnimation {
         MoveAnimation::new(self, duration, from.into(), to.into())
     }
@@ -379,6 +386,7 @@ impl<T: IntoAffectedShapes + Sized> AnimationHelper for T {}
 
 impl<T: Shape> RIObject<T> {
     #[inline]
+    #[must_use = "Animation must be passed to a dispatcher to be played"]
     pub fn move_to<D: IntoDuration, P: Into<Vec2>>(&self, duration: D, to: P) -> MoveAnimation {
         let from = self.shape().transform().pos;
         MoveAnimation::new(self, duration, from, to.into())

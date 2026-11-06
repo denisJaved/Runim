@@ -28,28 +28,33 @@ impl InterpolationBuilder {
         self.parts.push(Box::new(move |shape, d| {
             let d = easing.apply(d);
             let val = from.lerp(&to, d);
-            drop(mem::replace((prop.get_mut)(shape), val));
+            //drop(mem::replace((prop.get_mut)(shape), val));
+            (prop.set)(shape, val);
         }));
     }
 
+    #[must_use = "Interpolation will not be created util build() is called"]
     pub fn linear<T>(mut self, prop: Property<T>, from: T, to: T) -> Self
     where T: Interpolate + Send + Sync {
         self.push(prop, from, to, DynEasingFn::Linear);
         self
     }
 
+    #[must_use = "Interpolation will not be created util build() is called"]
     pub fn with_easing<T>(mut self, prop: Property<T>, from: T, to: T, easing: &'static dyn EasingFn) -> Self
     where T: Interpolate + Send + Sync {
         self.push(prop, from, to, DynEasingFn::Ref(easing));
         self
     }
 
+    #[must_use = "Interpolation will not be created util build() is called"]
     pub fn with_owned_easing<T>(mut self, prop: Property<T>, from: T, to: T, easing: Box<dyn EasingFn>) -> Self
     where T: Interpolate + Send + Sync {
         self.push(prop, from, to, DynEasingFn::Boxed(easing));
         self
     }
 
+    #[must_use = "Animation must be passed to a dispatcher to be played"]
     pub fn build(self) -> Interpolation {
         Interpolation {
             shapes: self.shapes,
