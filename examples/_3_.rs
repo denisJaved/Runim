@@ -8,7 +8,8 @@ fn main() -> anyhow::Result<()> {
     dispatch.begin(AnimationConfig::p360());
 
     let scene = dispatch.new_scene();
-    let shape = dispatch.scene(&scene)
+    let shape =
+        dispatch.scene(&scene)
         .add_rectangle();
     shape.set_pos(-2.0, 0.0);
 
@@ -19,7 +20,6 @@ fn main() -> anyhow::Result<()> {
         interpolate!(&shape, 6.0,
             property::POSITION: Vec2::new(-2.0, 0.0) => Vec2::new(2.0, 0.0); &easing::EASE_IN_OUT,
             property::COLOR: Color::WHITE => Color::RED; LINEAR,
-            //property::CIRCLE_ANGLES: 24 => 3; LINEAR
         )
     )?;
 

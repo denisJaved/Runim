@@ -1,7 +1,7 @@
 //! # Runim - Rust Animation Renderer
 //!
 //! Runim is a library providing tools for creating and rendering
-//! math animations using Rust programming language inspired
+//! animations using Rust programming language inspired
 //! by [Manim](https://www.manim.community).
 //!
 //! # Installation
@@ -10,7 +10,7 @@
 //! cargo add runim
 //! ```
 //! Or add the following lines to your `Cargo.toml`:
-//! ```yaml
+//! ```toml
 //! [dependencies]
 //! runim = "0.1.0"
 //! ```
