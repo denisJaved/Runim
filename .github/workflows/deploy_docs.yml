@@ -26,7 +26,7 @@ jobs:
         uses: actions/configure-pages@v5
       - name: Build with mdBook
         run: |
-          bin/mdbook build
+          ./bin/mdbook build
       - name: Upload Artifact
         uses: actions/upload-pages-artifact@v3
         with:
