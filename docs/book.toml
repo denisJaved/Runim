@@ -1,0 +1,7 @@
+[book]
+title = "Runim"
+authors = ["DenisJaved"]
+language = "en"
+
+[output.html.playground]
+runnable = false
