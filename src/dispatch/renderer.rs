@@ -39,7 +39,10 @@ pub trait FriendlyRenderer: Renderer + Send + 'static {
                 self.shutdown()
             }
         };
-        self.send(CommandCallback::from_result(res));
+        match CommandCallback::from_result(res) {
+            CommandCallback::Ignore => {/* NO OP */}
+            a => self.send(a)
+        }
     }
 }
 
@@ -61,7 +64,8 @@ pub enum Command {
 pub enum CommandCallback {
     FatalError(anyhow::Error),
     Wait(Duration),
-    Ok
+    Ok,
+    Ignore
 }
 
 impl CommandCallback {

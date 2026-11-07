@@ -201,6 +201,9 @@ impl<R: Renderer> RunimDispatcher<R> {
                 sleep(d)
             }
             CommandCallback::Ok => {}
+            _ => {
+                panic!("Invalid CommandCallback value")
+            }
         }
     }
 }

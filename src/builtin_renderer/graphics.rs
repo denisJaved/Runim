@@ -1,21 +1,26 @@
 use std::any::Any;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::path::PathBuf;
+use std::sync::{mpsc, Arc};
 use std::time::Duration;
 use anyhow::bail;
 use glam::Vec3;
-use log::{info};
+use log::{info, warn};
 use wgpu::util::DeviceExt;
 use wgpu::wgt;
+use wgpu::CurrentSurfaceTexture::{Lost, Occluded, Outdated, Timeout, Validation};
 use winit::window::Window;
 use runim::animations::{AffectedShapes, Animation, DynamicShape};
 use runim::builtin_renderer::camera::{CameraUniform, Projection};
-use runim::builtin_renderer::vertex;
 use runim::builtin_renderer::vertex::Vertex;
 use super::texture::Texture;
 use runim::dbgn;
 use runim::renderer::DrawContextImpl;
 use runim::shapes::{Color, ObjectDesc, ObjectID};
+use crate::builtin_renderer::live_preview::WindowTarget;
+use crate::builtin_renderer::{Frame, FrameInner, OutputTarget};
+use crate::builtin_renderer::file_renderer::VideoTarget;
+use crate::shapes::AnimationConfig;
 
 pub struct RunimState {
     objects: Vec<ObjectDesc>,
@@ -63,17 +68,18 @@ impl ResizableBuffer {
 }
 
 pub struct RunimGraphics {
-    window: Arc<Window>,
-    surface: wgpu::Surface<'static>,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    config: wgpu::SurfaceConfiguration,
+    // window: Arc<Window>,
+    // surface: wgpu::Surface<'static>,
+    pub(crate) target: OutputTarget,
+    pub(crate) device: wgpu::Device,
+    pub(crate) queue: wgpu::Queue,
+    //config: wgpu::SurfaceConfiguration,
     is_surface_configured: bool,
     render_pipeline: wgpu::RenderPipeline,
     depth_texture: Texture,
     vertex_buffer: ResizableBuffer,
     index_buffer: wgpu::Buffer,
-    fps: u32,
+    pub(crate) anim_config: AnimationConfig,
     state: RunimState,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
@@ -84,18 +90,30 @@ pub struct RunimGraphics {
 impl RunimGraphics {
     // TODO: Remove window from RunimGraphics.
     //       This type should not care about its render surface
-    pub async fn new(window: Arc<Window>, fps: u32) -> anyhow::Result<RunimGraphics> {
-        info!("Initializing runim renderer");
-        let size = window.inner_size();
 
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+    fn new_instance() -> wgpu::Instance {
+        wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::PRIMARY,
             flags: Default::default(),
             memory_budget_thresholds: Default::default(),
             backend_options: Default::default(),
             display: None
-        });
+        })
+    }
 
+    async fn request_device(adapter: &wgpu::Adapter) -> anyhow::Result<(wgpu::Device, wgpu::Queue)> {
+        Ok(adapter.request_device(&wgpu::DeviceDescriptor {
+                label: dbgn!("WGPU Device").name(),
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::defaults(),
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
+                memory_hints: Default::default(),
+                trace: wgpu::Trace::Off,
+        }).await?)
+    }
+
+    pub async fn new_windowed(window: Arc<Window>, fps: u32) -> anyhow::Result<RunimGraphics> {
+        let instance = Self::new_instance();
         let surface = instance.create_surface(window.clone())?;
         let adapter = instance.
             request_adapter(&wgpu::RequestAdapterOptions {
@@ -106,18 +124,11 @@ impl RunimGraphics {
             })
             .await?;
 
-        let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor {
-                label: dbgn!("WGPU Device").name(),
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::defaults(),
-                experimental_features: wgpu::ExperimentalFeatures::disabled(),
-                memory_hints: Default::default(),
-                trace: wgpu::Trace::Off,
-            })
-            .await?;
+        let (device, queue) = Self::request_device(&adapter).await?;
 
+        let size = window.inner_size();
         let surface_caps = surface.get_capabilities(&adapter);
+
         let surface_format = surface_caps
             .formats
             .iter()
@@ -131,11 +142,6 @@ impl RunimGraphics {
             .find(|f| **f == wgpu::PresentMode::Fifo)
             .unwrap_or(&surface_caps.present_modes[0]);
 
-        {
-            let info = device.adapter_info();
-            info!("Found applicable device {} using {surface_format:?}/{present_format:?} format", info.name);
-        }
-
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
@@ -147,13 +153,100 @@ impl RunimGraphics {
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
         };
+        surface.configure(&device, &config);
 
-        let projection = Projection::new(size.width, size.height);
+        {
+            let info = device.adapter_info();
+            info!("Found applicable device {} using {surface_format:?}/{present_format:?} format for windowed graphics", info.name);
+        }
+
+        let target = OutputTarget::Window(WindowTarget {
+            window,
+            surface,
+            config,
+            //configured: false,
+        });
+
+        Self::new(adapter, device, queue, target, AnimationConfig {
+            width: size.width,
+            height: size.height,
+            fps
+        }).await
+    }
+
+    pub async fn new_video(anim_config: AnimationConfig, tx: mpsc::Sender<Vec<u8>>) -> anyhow::Result<RunimGraphics> {
+        let instance = Self::new_instance();
+
+        // TODO: Maybe move instance.request_adapter to Self::request_device?
+
+        let adapter = instance.
+            request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: None,
+                force_fallback_adapter: false,
+                apply_limit_buckets: false
+            })
+            .await?;
+
+        let (device, queue) = Self::request_device(&adapter).await?;
+
+        let format = wgpu::TextureFormat::Rgba8UnormSrgb;
+
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: dbgn!("Video Frame").name(),
+            size: wgpu::Extent3d {
+                width: anim_config.width,
+                height: anim_config.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[]
+        });
+        let view = texture.create_view(&Default::default());
+
+        let unpadded = anim_config.width * 4;
+        let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+        let padded_row = (unpadded + align - 1) / align * align;
+
+        let readback = device.create_buffer(&wgpu::BufferDescriptor {
+            label: dbgn!("Video Readback").name(),
+            size: (padded_row * anim_config.height) as u64,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        let target = OutputTarget::Video(VideoTarget {
+            texture,
+            view,
+            format,
+            config: anim_config.clone(),
+            padded_row,
+            readback,
+            encoder: tx,
+        });
+
+        Self::new(adapter, device, queue, target, anim_config).await
+    }
+
+    async fn new(
+        adapter: wgpu::Adapter,
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+        target: OutputTarget,
+        anim_config: AnimationConfig
+    ) -> anyhow::Result<RunimGraphics> {
+        info!("Initializing runim renderer");
+
+        let projection = Projection::new(anim_config.width, anim_config.height);
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_proj(&projection);
 
         let depth_texture = Texture::create_depth_texture(
-            &device, &config, dbgn!("Depth Texture").name()
+            &device, anim_config.width, anim_config.height, dbgn!("Depth Texture").name()
         );
         let _texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -224,7 +317,7 @@ impl RunimGraphics {
                     },
                     count: None,
                 }],
-                label: Some("camera_bind_group_layout"),
+                label: dbgn!("camera_bind_group_layout").name(),
             });
 
         let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -233,7 +326,7 @@ impl RunimGraphics {
                 binding: 0,
                 resource: camera_buffer.as_entire_binding(),
             }],
-            label: Some("camera_bind_group"),
+            label: dbgn!("camera_bind_group").name(),
         });
 
         let render_pipeline_layout =
@@ -245,20 +338,25 @@ impl RunimGraphics {
                 immediate_size: 0,
             });
 
+        let format = match &target {
+            OutputTarget::Window(w) => w.config.format,
+            OutputTarget::Video(v) => v.format
+        };
+
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: dbgn!("Render Pipeline").name(),
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[Some(vertex::Vertex::desc())],
+                buffers: &[Some(Vertex::desc())],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
+                    format,
                     blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -291,17 +389,15 @@ impl RunimGraphics {
         info!("Runim renderer is ready!");
 
         Ok(RunimGraphics {
-            surface,
+            target,
             device,
             queue,
-            config,
             is_surface_configured: false,
-            window,
             render_pipeline,
             depth_texture,
             vertex_buffer,
             index_buffer,
-            fps,
+            anim_config,
             state: RunimState {
                 objects: vec![],
                 animation_cache: HashMap::new()
@@ -313,33 +409,60 @@ impl RunimGraphics {
         })
     }
 
-    pub fn resize(&mut self, width: u32, height: u32) {
-        if width > 0 && height > 0 {
-            self.config.width = width;
-            self.config.height = height;
-            self.surface.configure(&self.device, &self.config);
-            self.is_surface_configured = true;
-
-            self.depth_texture = Texture::create_depth_texture(
-                &self.device, &self.config, dbgn!("depth_texture").name()
-            );
-
-            //self.projection.resize(width, height);
-            /*self.queue.write_buffer(
-                &self.camera_buffer,
-                0,
-                bytemuck::cast_slice(&[self.camera_uniform]),
-            );*/
-        }
-    }
+    // pub fn resize(&mut self, width: u32, height: u32) {
+    //     if width > 0 && height > 0 {
+    //         self.config.width = width;
+    //         self.config.height = height;
+    //         self.surface.configure(&self.device, &self.config);
+    //         self.is_surface_configured = true;
+    //
+    //         self.depth_texture = Texture::create_depth_texture(
+    //             &self.device, &self.config, dbgn!("depth_texture").name()
+    //         );
+    //
+    //         //self.projection.resize(width, height);
+    //         /*self.queue.write_buffer(
+    //             &self.camera_buffer,
+    //             0,
+    //             bytemuck::cast_slice(&[self.camera_uniform]),
+    //         );*/
+    //     }
+    // }
 
     pub fn render(&mut self, dt: Duration) -> anyhow::Result<()> {
         use wgpu::CurrentSurfaceTexture::*;
-        self.window.request_redraw();
 
-        if !self.is_surface_configured {
-            return Ok(());
-        }
+        let frame = match &self.target {
+            OutputTarget::Window(w) => {
+                w.window.request_redraw();
+                // if !w.configured {
+                //     return Ok(());
+                // }
+                match w.surface.get_current_texture() {
+                    Success(tex) | Suboptimal(tex) => {
+                        let view = tex.texture.create_view(&Default::default());
+                        Frame { view, inner: FrameInner::Surface(tex) }
+                    }
+                    Timeout | Occluded | Validation => {
+                        return Ok(());
+                    }
+                    Outdated => {
+                        //w.surface.configure(&self.device, &self.config);
+                        warn!("Windowed surface is outdated...");
+                        return Ok(());
+                    }
+                    Lost => {
+                        bail!("Lost graphical device")
+                    }
+                }
+            }
+            OutputTarget::Video(v) => {
+                Frame {
+                    view: v.view.clone(),
+                    inner: FrameInner::Offscreen
+                }
+            }
+        };
 
         let mut ctx: Box<dyn DrawContextImpl> = Box::new(RunimDrawContext::new());
         let seconds = dt.as_secs_f64();
@@ -368,24 +491,6 @@ impl RunimGraphics {
             self.queue.submit([]);
         }
 
-        let output = match self.surface.get_current_texture() {
-            Success(t) => t,
-            Suboptimal(t) => t,
-            Timeout | Occluded | Validation => {
-                return Ok(());
-            }
-            Outdated => {
-                self.surface.configure(&self.device, &self.config);
-                return Ok(());
-            }
-            Lost => {
-                bail!("Lost graphical device")
-            }
-        };
-
-        let view = output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -395,7 +500,7 @@ impl RunimGraphics {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: dbgn!("Render Pass").name(),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
+                view: &frame.view,
                 resolve_target: None,
                 depth_slice: None,
                 ops: wgpu::Operations {
@@ -428,14 +533,58 @@ impl RunimGraphics {
         drop(render_pass);
 
         self.queue.submit(std::iter::once(encoder.finish()));
-        self.queue.present(output);
+
+        match (&self.target, frame.inner) {
+            (OutputTarget::Window(_), FrameInner::Surface(tex)) => {
+                self.queue.present(tex);
+            }
+            (OutputTarget::Video(v), FrameInner::Offscreen) => {
+                let mut enc = self.device.create_command_encoder(&Default::default());
+                enc.copy_texture_to_buffer(
+                    wgpu::TexelCopyTextureInfo {
+                        texture: &v.texture,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    wgpu::TexelCopyBufferInfo {
+                        buffer: &v.readback,
+                        layout: wgpu::TexelCopyBufferLayout {
+                            offset: 0,
+                            bytes_per_row: Some(v.padded_row),
+                            rows_per_image: Some(self.anim_config.height),
+                        },
+                    },
+                    wgpu::Extent3d {
+                        width: self.anim_config.width,
+                        height: self.anim_config.height,
+                        depth_or_array_layers: 1,
+                    },
+                );
+                self.queue.submit(Some(enc.finish()));
+
+                // Blocking map. Pipeline this if throughput matters.
+                let slice = v.readback.slice(..);
+                let (tx, rx) = std::sync::mpsc::channel();
+                slice.map_async(wgpu::MapMode::Read, move |r| { let _ = tx.send(r); });
+                self.device.poll(wgpu::PollType::Wait { submission_index: None, timeout: None })?;
+                rx.recv().unwrap()?;
+
+                let data = slice.get_mapped_range()?;
+                let unpadded = (self.anim_config.width * 4) as usize;
+                let mut rgba = Vec::with_capacity(unpadded * self.anim_config.height as usize);
+                for row in data.chunks(v.padded_row as usize) {
+                    rgba.extend_from_slice(&row[..unpadded]);
+                }
+                drop(data);
+                v.readback.unmap();
+
+                v.encoder.send(rgba)?;
+            }
+            _ => unreachable!() // Do we really need frame.inner?
+        }
 
         Ok(())
-    }
-
-
-    pub fn fps(&self) -> u32 {
-        self.fps
     }
 
     pub fn set_scene(&mut self, objects: Vec<ObjectDesc>) {

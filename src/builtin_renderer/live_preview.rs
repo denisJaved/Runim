@@ -1,5 +1,3 @@
-//! Adapters module provide implementations of [Renderer]
-
 use std::sync::{mpsc, Arc};
 use std::sync::mpsc::Sender;
 use std::thread;
@@ -91,6 +89,14 @@ struct LiveRendererApp {
     callback: Sender<CommandCallback>
 }
 
+#[derive(Debug)]
+pub struct WindowTarget {
+    pub window: Arc<Window>,
+    pub surface: wgpu::Surface<'static>,
+    pub config: wgpu::SurfaceConfiguration,
+    //pub configured: bool
+}
+
 impl Renderer for LiveRendererApp {
     fn new(_callback: Sender<CommandCallback>) -> Self {
         unreachable!() // LiveRendererApp created internally in LivePreviewRenderer
@@ -104,11 +110,11 @@ impl Renderer for LiveRendererApp {
 impl FriendlyRenderer for LiveRendererApp {
     fn begin(&mut self, config: AnimationConfig) -> anyhow::Result<CommandCallback> {
         let window = self.window.clone().unwrap();
-        let mut graphics = block_on(RunimGraphics::new(
+        let graphics = block_on(RunimGraphics::new_windowed(
             window,
             config.fps
         ))?;
-        graphics.resize(config.width, config.height);
+        //graphics.resize(config.width, config.height);
         self.graphics = Some(graphics);
         Ok(CommandCallback::Ok)
     }

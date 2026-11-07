@@ -3,9 +3,10 @@ use runim::prelude::*;
 use runim::interpolate;
 
 fn main() -> anyhow::Result<()> {
-    let mut dispatch = RunimDispatcher::<LivePreviewRenderer>::new()?;
+    env_logger::init();
+    let mut dispatch = RunimDispatcher::<FileRenderer>::new()?;
 
-    dispatch.begin(AnimationConfig::p360());
+    dispatch.begin(AnimationConfig::p1080());
 
     let scene = dispatch.new_scene();
     let shape =
@@ -17,7 +18,7 @@ fn main() -> anyhow::Result<()> {
     dispatch.wait(0.3)?;
 
     dispatch.play(
-        interpolate!(&shape, 6.0,
+        interpolate!(&shape, 3.0,
             property::POSITION: Vec2::new(-2.0, 0.0) => Vec2::new(2.0, 0.0); &easing::EASE_IN_OUT,
             property::COLOR: Color::WHITE => Color::RED; LINEAR,
         )
