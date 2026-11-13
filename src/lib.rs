@@ -18,7 +18,7 @@
 //! ## Feature flags
 //! - `debugging` - enables debug names for `wgpu` objects in built-in renderers
 //! - `prefixed_prelude` - enables prefixed prelude version. See [prelude::prefixed]
-//! - `builtin_renderer` - includes Runim's built-in animation renderers. Requires [wgpu](https://crates.io/crates/wgpu), [winit](https://crates.io/crates/winit), [bytemuck](https://crates.io/crates/bytemuck), [pollster](https://crates.io/crates/pollster), [ffmpeg-next](https://crates.io/crates/ffmpeg-next), and [image/png](https://crates.io/crates/image).
+//! - `builtin_renderer` - includes Runim's built-in animation renderers. Requires [wgpu](https://crates.io/crates/wgpu), [winit](https://crates.io/crates/winit), [bytemuck](https://crates.io/crates/bytemuck), [pollster](https://crates.io/crates/pollster), [ffmpeg-next](https://crates.io/crates/ffmpeg-next).
 //! - `cubic_bezier_presets` - includes ready-to-use presets for [animations::easing::cubic_bezier].
 //! 
 //! All flags above are enabled by default.
@@ -34,8 +34,11 @@ pub mod builtin_renderer;
 
 extern crate self as runim;
 
-pub use runim_derive::{Shape, Animation, interpolate};
-pub use util_traits::IntoDuration;
+#[macro_use]
+extern crate static_assertions;
+
+pub use runim_derive::{Shape, Animation, interpolate, AsAny};
+pub use util_traits::{IntoDuration, AsAny};
 
 /// The Runim Prelude.
 ///

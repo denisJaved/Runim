@@ -1,4 +1,9 @@
+use std::fmt::{Debug, Formatter};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use image::{DynamicImage, GenericImageView};
+use crate::{dbgn, AsAny};
+use crate::renderer::ImageHandleImpl;
 
 pub struct Texture {
     pub texture: wgpu::Texture,
@@ -78,8 +83,8 @@ impl Texture {
         })
     }
 
-    pub(crate) const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
-    pub(crate) fn create_depth_texture(
+    pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+    pub fn create_depth_texture(
         device: &wgpu::Device,
         width: u32,
         height: u32,
@@ -120,5 +125,54 @@ impl Texture {
             view,
             sampler,
         }
+    }
+
+    pub fn into_handle(self, device: &wgpu::Device, layout: &wgpu::BindGroupLayout) -> TextureHandle {
+        let bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&self.view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&self.sampler),
+            }],
+            label: dbgn!("camera_bind_group").name(),
+        });
+        let inner = TextureHandleInner {
+            id: TEX_UD.fetch_add(1, Ordering::Release),
+            inner: self,
+            bind,
+        };
+        TextureHandle {
+            texture: Arc::new(inner)
+        }
+    }
+}
+static TEX_UD: AtomicU64 = AtomicU64::new(0);
+pub struct TextureHandleInner {
+    pub id: u64,
+    pub inner: Texture,
+    pub bind: wgpu::BindGroup
+}
+
+#[repr(transparent)]
+#[derive(AsAny, Clone)]
+pub struct TextureHandle {
+    pub texture: Arc<TextureHandleInner>
+}
+
+impl Debug for TextureHandle {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("RunimTexture")
+    }
+}
+
+impl ImageHandleImpl for TextureHandle {}
+
+impl Drop for TextureHandleInner {
+    fn drop(&mut self) {
+        self.inner.texture.destroy();
     }
 }

@@ -2,7 +2,7 @@ use glam::Vec3;
 use crate::prelude::{Color, RIObject, Shape};
 use crate::renderer::DrawContext;
 use crate::Shape;
-use crate::shapes::Transform2D;
+use crate::shapes::{ShapeState, Transform2D};
 
 #[derive(Shape, Debug, Clone, PartialEq)]
 #[shape(colored)]
@@ -13,7 +13,7 @@ pub struct Circle {
     pub angles: u16
 }
 impl Shape for Circle {
-    fn draw(&self, ctx: &mut DrawContext) {
+    fn draw<'a, 'b>(&'b mut self, ctx: &'a mut (dyn DrawContext + 'a), _: Option<&'b mut dyn ShapeState>) {
         ctx.offset2(self.transform.pos);
 
         let mut last_point = Vec3::new(0.0, -self.radius, 0.0);

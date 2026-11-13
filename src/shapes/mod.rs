@@ -6,13 +6,14 @@ mod color;
 use std::any::Any;
 use std::fmt::{Debug, Display, Formatter};
 use glam::Vec2;
-use runim::renderer::DrawContext;
 
 pub use scene::{Scene, RIObject};
 pub use primitive::*;
 pub use animation::AnimationConfig;
 pub use color::{Color, ColorHSV, ColoredShape};
 pub(crate) use scene::ObjectDesc;
+use crate::AsAny;
+use crate::renderer::DrawContext;
 
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
 #[repr(transparent)]
@@ -40,7 +41,7 @@ impl Display for SceneID {
 /// 
 /// This trait is not intended to be implemented manually.
 /// Use Shape derive macro instead.
-pub trait ShapeBase: Send + Sync + 'static {
+pub trait ShapeBase {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
     /// Returns this shape as [ColoredShape] reference if it is one. [None], otherwise.
@@ -54,8 +55,12 @@ pub trait ShapeBase: Send + Sync + 'static {
 pub trait Shape: ShapeBase + Debug + Send + Sync + 'static {
     /// Renders this shape in provided [DrawContext].
     /// 
-    /// Check [DrawContext]'s docs for more info.
-    fn draw(&self, ctx: &mut DrawContext);
+    /// This method is only called if there is no cached draw data for this shape.
+    ///
+    /// Caching is enabled by default. Add `#[shape(no_cache)]` to disable.
+    /// Note that renderers may not support caching. In this case caching
+    /// will be ignored.
+    fn draw<'a, 'b>(&'b mut self, ctx: &'a mut (dyn DrawContext + 'a), state: Option<&'b mut dyn ShapeState>);
     
     /// Returns reference to this shape's [Transform2D].
     /// 
@@ -100,7 +105,26 @@ pub trait Shape: ShapeBase + Debug + Send + Sync + 'static {
     /// assert_eq!(guard.transform().pos.x, 25.0);
     /// ```
     fn transform_mut(&mut self) -> &mut Transform2D;
+
+    fn extract_state(&self) -> Option<&dyn ShapeState> {
+        None
+    }
+
+    fn extract_state_mut(&mut self) -> Option<&mut dyn ShapeState> {
+        None
+    }
 }
+assert_obj_safe!(Shape);
+
+pub trait ShapeState: AsAny {
+    fn as_shape_state(&self) -> &dyn ShapeState where Self: Sized {
+        self
+    }
+    fn as_shape_state_mut(&mut self) -> &mut dyn ShapeState where Self: Sized {
+        self
+    }
+}
+assert_obj_safe!(ShapeState);
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Transform2D {

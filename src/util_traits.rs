@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::time::Duration;
 
 /// Types that can be converted into second durations represented by floats.
@@ -60,4 +61,9 @@ impl IntoDuration for f64 {
         debug_assert!(*self >= 0.0 && self.is_finite(), "time duration must be finite and positive");
         *self
     }
+}
+
+pub trait AsAny {
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }

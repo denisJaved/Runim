@@ -1,19 +1,22 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::{mpsc, Arc};
-use glam::Vec3;
+use glam::{Vec2, Vec3};
+use image::DynamicImage;
 use log::info;
 use crate::animations::{AffectedShapes, Animation, DynamicShape};
+use crate::AsAny;
 use crate::dispatch::{Command, CommandCallback, FriendlyRenderer, Renderer};
 use crate::prelude::{AnimationConfig, Color};
-use crate::renderer::DrawContextImpl;
+use crate::renderer::draw::{ImageHandle, ImageHandleImpl};
+use crate::renderer::DrawContext;
 use crate::shapes::{ObjectDesc, ObjectID};
 
 /// Renderer used for testing.
 /// 
 /// It does not actually render anything, but
 /// it runs animations and no-op draws.
-pub struct SilentTestRenderer {
+pub(crate) struct SilentTestRenderer {
     callback: mpsc::Sender<CommandCallback>,
     state: Option<LocalState>
 }
@@ -80,7 +83,7 @@ impl FriendlyRenderer for SilentTestRenderer {
         
         info!("Rendering {frames} frames for {duration} seconds");
         for i in 0..frames {
-            let mut ctx: Box<dyn DrawContextImpl> = Box::new(TestContext());
+            let mut ctx = TestContext;
             let t: f64 = (i as f64) * z;
             
             for x in self.state().objects.iter() {
@@ -93,10 +96,10 @@ impl FriendlyRenderer for SilentTestRenderer {
                     
                     let d: f64 = t / anim.duration();
                     anim.apply(&mut untyped, d);
-                    clone.draw(&mut ctx);
+                    clone.draw(&mut ctx, x.shape.write().extract_state_mut());
                     continue
                 }
-                x.shape.read().draw(&mut ctx);
+                x.shape.write().draw(&mut ctx, None);
             }
         }
         
@@ -127,9 +130,9 @@ impl Renderer for SilentTestRenderer {
     }
 }
 
-struct TestContext();
+struct TestContext;
 
-impl DrawContextImpl for TestContext {
+impl DrawContext for TestContext {
     fn offset(&mut self, pos: Vec3) {
         
     }
@@ -142,11 +145,15 @@ impl DrawContextImpl for TestContext {
         
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
+    fn tex_vertex(&mut self, pos: Vec3, tex_pos: Vec2, tex: &ImageHandle) {
+
     }
 
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
+    fn load_image(&mut self, image: &DynamicImage) -> anyhow::Result<ImageHandle> {
+        Ok(Box::new(TestHandle))
     }
 }
+
+#[derive(AsAny, Debug)]
+struct TestHandle;
+impl ImageHandleImpl for TestHandle {}

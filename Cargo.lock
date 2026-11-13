@@ -1842,6 +1842,7 @@ dependencies = [
  "parking_lot 0.13.0",
  "pollster",
  "runim-derive",
+ "static_assertions",
  "thiserror 2.0.21",
  "wgpu",
  "winit",

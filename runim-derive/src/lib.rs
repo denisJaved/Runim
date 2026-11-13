@@ -96,12 +96,16 @@ pub fn derive_shape_base(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
     let mut has_color = false;
+    let mut no_cache = false;
 
     for attr in &input.attrs {
         if attr.path().is_ident("shape") {
             if let Err(err) = attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("colored") {
                     has_color = true;
+                    Ok(())
+                } else if meta.path.is_ident("no_cache") {
+                    no_cache = true;
                     Ok(())
                 } else {
                     Err(meta.error("unknown shape option"))
@@ -214,6 +218,27 @@ pub fn derive_animation_base(input: TokenStream) -> TokenStream {
             }
         }
         #compositor
+    };
+
+    expanded.into()
+}
+
+
+#[proc_macro_derive(AsAny)]
+pub fn derive_as_any(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = input.ident;
+
+    let expanded = quote! {
+        impl ::runim::util_traits::AsAny for #name {
+            fn as_any(&self) -> &dyn ::core::any::Any {
+                self
+            }
+
+            fn as_any_mut(&mut self) -> &mut dyn ::core::any::Any {
+                self
+            }
+        }
     };
 
     expanded.into()

@@ -4,7 +4,8 @@ use glam::Vec2;
 use parking_lot::{MappedRwLockReadGuard, MappedRwLockWriteGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
-use crate::shapes::SceneID;
+use image::DynamicImage;
+use crate::shapes::{ImageRectangle, SceneID};
 
 static SCENE_ID: AtomicU32 = AtomicU32::new(0);
 type SharedShape = Arc<RwLock<Box<dyn Shape>>>;
@@ -121,6 +122,7 @@ impl Scene {
     /// let square: RIObject<Rectangle> = scene.add();
     /// let circle: RIObject<Circle> = scene.add();
     /// ```
+    #[inline]
     pub fn add<S: Shape + Default>(&mut self) -> RIObject<S> {
         self.add_existing(S::default())
     }
@@ -135,6 +137,11 @@ impl Scene {
     #[inline(always)]
     pub fn add_circle(&mut self) -> RIObject<Circle> {
         self.add()
+    }
+
+    #[inline(always)]
+    pub fn add_img(&mut self, image: DynamicImage) -> RIObject<ImageRectangle> {
+        self.add_existing(ImageRectangle::new(image))
     }
 
     /// Create new handle to object stored in scene by its id.

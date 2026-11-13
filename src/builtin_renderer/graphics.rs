@@ -1,10 +1,12 @@
 use std::any::Any;
 use std::collections::HashMap;
+use std::mem;
 use std::path::PathBuf;
 use std::sync::{mpsc, Arc};
 use std::time::Duration;
 use anyhow::bail;
-use glam::Vec3;
+use glam::{Vec2, Vec3};
+use image::DynamicImage;
 use log::{info, warn};
 use wgpu::util::DeviceExt;
 use wgpu::wgt;
@@ -13,13 +15,15 @@ use winit::window::Window;
 use runim::animations::{AffectedShapes, Animation, DynamicShape};
 use runim::builtin_renderer::camera::{CameraUniform, Projection};
 use runim::builtin_renderer::vertex::Vertex;
-use super::texture::Texture;
+use super::texture::{Texture, TextureHandle};
 use runim::dbgn;
-use runim::renderer::DrawContextImpl;
+use runim::renderer::DrawContext;
 use runim::shapes::{Color, ObjectDesc, ObjectID};
 use crate::builtin_renderer::live_preview::WindowTarget;
 use crate::builtin_renderer::{Frame, FrameInner, OutputTarget};
 use crate::builtin_renderer::file_renderer::VideoTarget;
+use crate::builtin_renderer::vertex::TexVertex;
+use crate::renderer::ImageHandle;
 use crate::shapes::AnimationConfig;
 
 pub struct RunimState {
@@ -76,13 +80,16 @@ pub struct RunimGraphics {
     //config: wgpu::SurfaceConfiguration,
     is_surface_configured: bool,
     render_pipeline: wgpu::RenderPipeline,
+    tex_render_pipeline: wgpu::RenderPipeline,
     depth_texture: Texture,
     vertex_buffer: ResizableBuffer,
+    tex_vertex_buffer: ResizableBuffer,
     index_buffer: wgpu::Buffer,
     pub(crate) anim_config: AnimationConfig,
     state: RunimState,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
+    texture_bind_group_layout: wgpu::BindGroupLayout,
     projection: Projection,
     camera_uniform: CameraUniform
 }
@@ -248,7 +255,7 @@ impl RunimGraphics {
         let depth_texture = Texture::create_depth_texture(
             &device, anim_config.width, anim_config.height, dbgn!("Depth Texture").name()
         );
-        let _texture_bind_group_layout =
+        let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
@@ -275,6 +282,10 @@ impl RunimGraphics {
             label: dbgn!("Shader").name(),
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
         });
+        let tex_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: dbgn!("Textured Shader").name(),
+            source: wgpu::ShaderSource::Wgsl(include_str!("tex_shader.wgsl").into()),
+        });
 
         let vertex_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
@@ -289,6 +300,18 @@ impl RunimGraphics {
         );
         let vertex_buffer = ResizableBuffer {
             buffer: vertex_buffer,
+            last_size: 3,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        };
+        let tex_vertex_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: dbgn!("Textured Vertex Buffer").name(),
+                contents: bytemuck::cast_slice::<TexVertex, u8>(&[]),
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            }
+        );
+        let tex_vertex_buffer = ResizableBuffer {
+            buffer: tex_vertex_buffer,
             last_size: 3,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         };
@@ -386,6 +409,58 @@ impl RunimGraphics {
             multiview_mask: None,
             cache: None,
         });
+        let tex_render_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: dbgn!("Render Pipeline Layout").name(),
+                bind_group_layouts: &[
+                    Some(&camera_bind_group_layout),
+                    Some(&texture_bind_group_layout)
+                ],
+                immediate_size: 0,
+            });
+        let tex_render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: dbgn!("Textured Render Pipeline").name(),
+            layout: Some(&tex_render_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &tex_shader,
+                entry_point: Some("vs_main"),
+                buffers: &[Some(TexVertex::desc())],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &tex_shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: Texture::DEPTH_FORMAT,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(wgpu::CompareFunction::Less),
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview_mask: None,
+            cache: None,
+        });
         info!("Runim renderer is ready!");
 
         Ok(RunimGraphics {
@@ -394,8 +469,10 @@ impl RunimGraphics {
             queue,
             is_surface_configured: false,
             render_pipeline,
+            tex_render_pipeline,
             depth_texture,
             vertex_buffer,
+            tex_vertex_buffer,
             index_buffer,
             anim_config,
             state: RunimState {
@@ -404,6 +481,7 @@ impl RunimGraphics {
             },
             camera_buffer,
             camera_bind_group,
+            texture_bind_group_layout,
             projection,
             camera_uniform
         })
@@ -464,11 +542,16 @@ impl RunimGraphics {
             }
         };
 
-        let mut ctx: Box<dyn DrawContextImpl> = Box::new(RunimDrawContext::new());
+        let mut ctx: RunimDrawContext = RunimDrawContext::new(
+            &self.device,
+            &self.queue,
+            &self.texture_bind_group_layout
+        );
         let seconds = dt.as_secs_f64();
 
         for obj in self.state.objects.iter() {
-            let guard = obj.shape.read();
+            let mut guard = obj.shape.write();
+
             if let Some(anim) = self.state.animation_cache.get_mut(&obj.id) {
                 let mut shape = guard.clone_raw();
                 let mut dynamic = DynamicShape {
@@ -478,16 +561,34 @@ impl RunimGraphics {
                 anim.passed += seconds;
                 let total = anim.animation.duration();
                 anim.animation.apply(&mut dynamic, (anim.passed / total).min(1.0));
-                shape.draw(&mut ctx);
+                shape.draw(&mut ctx, guard.extract_state_mut());
                 continue;
             }
-            guard.draw(&mut ctx);
+            guard.draw(&mut ctx, None);
         }
-        let x = ctx.as_any_mut().downcast_mut::<RunimDrawContext>()
-            .unwrap();
-        let is_empty = x.vertices.is_empty();
+        let (vertices, mut tex_vertices) = ctx.unpack();
+
+        let mut submit = false;
+        let is_empty = vertices.is_empty();
         if !is_empty {
-            self.vertex_buffer.write(&mut self.device, &mut self.queue, &x.vertices);
+            self.vertex_buffer.write(&mut self.device, &mut self.queue, &vertices);
+            submit = true;
+        }
+        let is_tex_empty = tex_vertices.is_empty();
+        if !is_tex_empty {
+            let mut ordered: Vec<TexVertex> = Vec::new();
+            let mut count = 0u32;
+            for (_, (begin, _, c)) in tex_vertices.iter_mut() {
+                let _ = mem::replace(begin, count);
+                count += c.len() as u32;
+                for x in c {
+                    ordered.push(x.clone()); // TODO: Get rid of the cloning somehow
+                }
+            }
+            self.tex_vertex_buffer.write(&mut self.device, &mut self.queue, &ordered);
+            submit = true;
+        }
+        if submit {
             self.queue.submit([]);
         }
 
@@ -528,6 +629,22 @@ impl RunimGraphics {
             /*render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..4, 0, 0..1);*/
             render_pass.draw(0..self.vertex_buffer.last_size, 0..1);
+        }
+
+        if !is_tex_empty {
+            for (_, (begin, tex, v)) in tex_vertices {
+                let len = v.len() as u32;
+                const SIZE: wgpu::BufferAddress = size_of::<TexVertex>() as wgpu::BufferAddress;
+
+                render_pass.set_pipeline(&self.tex_render_pipeline);
+                render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+                render_pass.set_bind_group(1, &tex.texture.bind, &[]);
+                render_pass.set_vertex_buffer(0, self.tex_vertex_buffer.buffer
+                    .slice((begin as wgpu::BufferAddress * SIZE)..((begin + len) as wgpu::BufferAddress * SIZE)));
+                /*render_pass.set_vertex_buffer(0, self.tex_vertex_buffer.buffer
+                    .slice(..));*/
+                render_pass.draw(0..len, 0..1);
+            }
         }
 
         drop(render_pass);
@@ -609,21 +726,37 @@ impl RunimGraphics {
 }
 
 #[derive(Debug)]
-struct RunimDrawContext {
+struct RunimDrawContext<'a> {
     offset: Vec3,
-    vertices: Vec<Vertex>
+    vertices: Vec<Vertex>,
+    tex_vertices: HashMap<u64, (u32, TextureHandle, Vec<TexVertex>)>,
+    device: &'a wgpu::Device,
+    queue: &'a wgpu::Queue,
+    texture_layout: &'a wgpu::BindGroupLayout,
 }
 
-impl RunimDrawContext {
-    pub fn new() -> RunimDrawContext {
+impl RunimDrawContext<'_> {
+    pub fn new<'a>(
+        device: &'a wgpu::Device,
+        queue: &'a wgpu::Queue,
+        texture_layout: &'a wgpu::BindGroupLayout
+    ) -> RunimDrawContext<'a> {
         RunimDrawContext {
             offset: Vec3::ZERO,
-            vertices: vec![],
+            vertices: Vec::new(),
+            tex_vertices: HashMap::new(),
+            device,
+            queue,
+            texture_layout
         }
+    }
+
+    pub fn unpack(self) -> (Vec<Vertex>, HashMap<u64, (u32, TextureHandle, Vec<TexVertex>)>) {
+        (self.vertices, self.tex_vertices)
     }
 }
 
-impl DrawContextImpl for RunimDrawContext {
+impl<'a> DrawContext for RunimDrawContext<'a> {
     fn offset(&mut self, pos: Vec3) {
         self.offset = pos;
     }
@@ -642,11 +775,23 @@ impl DrawContextImpl for RunimDrawContext {
         });
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
+    fn tex_vertex(&mut self, mut pos: Vec3, tex_pos: Vec2, tex: &ImageHandle) {
+        pos.x += self.offset.x;
+        pos.y += self.offset.y;
+        pos.z -= 1f32;
+        let tex = tex.as_any().downcast_ref::<TextureHandle>().unwrap();
+        self.tex_vertices.entry(tex.texture.id).or_insert_with(|| (0, tex.clone(), Vec::new()))
+            .2.push(TexVertex {
+                position: pos.to_array(),
+                tex: tex_pos.to_array(),
+            });
     }
 
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
+    fn load_image(&mut self, image: &DynamicImage) -> anyhow::Result<ImageHandle> {
+        let texture = Texture::from_image(
+            self.device, self.queue, image, dbgn!("DrawContext#").name(),
+            wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING
+        )?;
+        Ok(Box::new(texture.into_handle(self.device, self.texture_layout)))
     }
 }

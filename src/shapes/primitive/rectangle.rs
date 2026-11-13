@@ -1,7 +1,7 @@
 use crate::prelude::{Color, RIObject, Shape};
 use crate::renderer::DrawContext;
 use crate::Shape;
-use crate::shapes::Transform2D;
+use crate::shapes::{ShapeState, Transform2D};
 
 /// A rectangular [Shape] described by [f32] width and height.
 ///
@@ -36,7 +36,7 @@ impl Rectangle {
     pub fn height_mut(&mut self) -> &mut f32 { &mut self.height }
 }
 impl Shape for Rectangle {
-    fn draw(&self, ctx: &mut DrawContext) {
+    fn draw<'a, 'b>(&'b mut self, ctx: &'a mut (dyn DrawContext + 'a), _: Option<&'b mut dyn ShapeState>) {
         use glam::vec3;
         ctx.offset(vec3(
             self.transform.pos.x - self.width / 2.0,
